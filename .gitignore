@@ -1,0 +1,48 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak
+venv.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pylintrc
+.pytest_cache/
+pip-log.txt
+pip-delete-this-directory.txt
+celerybeat-schedule.*
+
+# Databases
+*.sqlite3
+*.db
+
+# Chroma
+data/chroma/
+backend/data/chroma/
+data/chroma/chroma.sqlite3
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+# Logs
+*.log
+
+# Other
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Private keys and docs
+backend/docs/*.pem
+docs/*.pem
+local_secrets/
