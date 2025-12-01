@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Tesseract from 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js';
+import Tesseract from 'tesseract.js';
 import { Shield, Search, Lock, Upload, Eye, EyeOff, Activity, CheckCircle, FileText, Server, Edit3, AlertCircle, ChevronRight, Terminal, Menu, X } from 'lucide-react';
 
 const API_URL = "http://localhost:8000";
