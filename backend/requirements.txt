@@ -4,6 +4,7 @@ celery==5.3.6
 redis==5.0.1
 python-multipart==0.0.6
 sqlalchemy==2.0.25
+psycopg2-binary==2.9.9 
 cryptography==42.0.1
 chromadb==0.4.22
 sentence-transformers==2.3.1
@@ -14,3 +15,4 @@ pydantic==2.5.3
 python-dotenv==1.0.1
 python-jose
 passlib
+bcrypt
