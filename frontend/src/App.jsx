@@ -446,6 +446,47 @@
 
 
 
+// import React from 'react';
+// import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+// import { useAuthStore } from './store/authStore';
+// import DashboardLayout from './components/layout/DashboardLayout';
+// import Login from './pages/Login';
+// import Register from './pages/Register';
+// import Dashboard from './pages/Dashboard';
+// import UploadWizard from './pages/UploadWizard';
+// import ChatInterface from './pages/ChatInterface';
+
+// // Guard component to protect private routes
+// const ProtectedRoute = () => {
+//   const { isAuthenticated } = useAuthStore();
+//   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+// };
+
+// const App = () => {
+//   return (
+//     <BrowserRouter>
+//       <Routes>
+//         {/* Public Routes */}
+//         <Route path="/login" element={<Login />} />
+//         <Route path="/register" element={<Register />} />
+        
+//         {/* Secure Routes (Wrapped in Guard) */}
+//         <Route element={<ProtectedRoute />}>
+//           <Route path="/" element={<DashboardLayout />}>
+//             <Route index element={<Dashboard />} />
+//             <Route path="upload" element={<UploadWizard />} />
+//             <Route path="chat" element={<ChatInterface />} />
+//           </Route>
+//         </Route>
+        
+//         {/* Catch-all: Redirect unknown paths to home */}
+//         <Route path="*" element={<Navigate to="/" replace />} />
+//       </Routes>
+//     </BrowserRouter>
+//   );
+// };
+
+// export default App;
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
@@ -456,10 +497,11 @@ import Dashboard from './pages/Dashboard';
 import UploadWizard from './pages/UploadWizard';
 import ChatInterface from './pages/ChatInterface';
 
-// Guard component to protect private routes
+// --- MOCK MODE: GUARD UNLOCKED ---
 const ProtectedRoute = () => {
-  const { isAuthenticated } = useAuthStore();
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  // In a real app, we check: const { isAuthenticated } = useAuthStore();
+  // But for this mock run, we just render the Outlet.
+  return <Outlet />;
 };
 
 const App = () => {
@@ -470,7 +512,7 @@ const App = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        {/* Secure Routes (Wrapped in Guard) */}
+        {/* Protected Routes (Now Unlocked) */}
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
@@ -479,7 +521,7 @@ const App = () => {
           </Route>
         </Route>
         
-        {/* Catch-all: Redirect unknown paths to home */}
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

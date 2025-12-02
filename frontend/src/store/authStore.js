@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 
 export const useAuthStore = create((set) => ({
-  user: null,
-  token: localStorage.getItem('token') || null,
-  userPrivateKey: null, // The unlocked CryptoKey object
-  userPublicKeyPem: localStorage.getItem('user_public_key') || null,
-  isAuthenticated: !!localStorage.getItem('token'),
+  // --- MOCK MODE: Default to logged in ---
+  user: { full_name: "Dr. Mock User", email: "demo@aarog.ai" },
+  token: "mock_jwt_token_for_demo_run",
+  userPrivateKey: null, 
+  userPublicKeyPem: "mock_public_key",
+  isAuthenticated: true, // <--- This prevents the redirect to Login
 
   setAuth: (user, token, privateKey, publicKeyPem) => {
     localStorage.setItem('token', token);
