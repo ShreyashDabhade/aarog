@@ -1,19 +1,22 @@
 import { create } from 'zustand';
 
 export const useAuthStore = create((set) => ({
-  // --- MOCK MODE: Default to logged in ---
-  user: { full_name: "Dr. Mock User", email: "demo@aarog.ai" },
-  token: "mock_jwt_token_for_demo_run",
+  user: null,
+  token: localStorage.getItem('token') || null,
+  role: localStorage.getItem('user_role') || 'patient', // Default to patient
   userPrivateKey: null, 
-  userPublicKeyPem: "mock_public_key",
-  isAuthenticated: true, // <--- This prevents the redirect to Login
+  userPublicKeyPem: localStorage.getItem('user_public_key') || null,
+  isAuthenticated: !!localStorage.getItem('token'),
 
-  setAuth: (user, token, privateKey, publicKeyPem) => {
+  setAuth: (user, token, privateKey, publicKeyPem, role = 'patient') => {
     localStorage.setItem('token', token);
     localStorage.setItem('user_public_key', publicKeyPem);
+    localStorage.setItem('user_role', role);
+    
     set({ 
       user, 
       token, 
+      role,
       userPrivateKey: privateKey,
       userPublicKeyPem: publicKeyPem,
       isAuthenticated: true 
@@ -23,9 +26,12 @@ export const useAuthStore = create((set) => ({
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user_public_key');
+    localStorage.removeItem('user_role');
+    
     set({ 
       user: null, 
       token: null, 
+      role: null,
       userPrivateKey: null, 
       userPublicKeyPem: null,
       isAuthenticated: false 

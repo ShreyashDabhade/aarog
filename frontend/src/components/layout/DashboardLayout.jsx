@@ -1,126 +1,125 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { 
-  LayoutDashboard, 
-  UploadCloud, 
-  MessageSquare, 
-  LogOut, 
-  Menu, 
-  X, 
-  ShieldCheck 
-} from 'lucide-react';
+import { Shield, LayoutDashboard, UploadCloud, MessageSquare, LogOut, Menu, X, Stethoscope, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const SidebarItem = ({ to, icon: Icon, label }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+        isActive 
+          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/25 font-medium' 
+          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+      }`
+    }
+  >
+    <Icon className="w-5 h-5" />
+    <span className="text-sm">{label}</span>
+  </NavLink>
+);
+
 const DashboardLayout = () => {
-  const { user, logout } = useAuthStore();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { logout, user, role } = useAuthStore();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Vault Dashboard', path: '/' },
-    { icon: UploadCloud, label: 'Secure Upload', path: '/upload' },
-    { icon: MessageSquare, label: 'AI Agent', path: '/chat' },
-  ];
-
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
-      
-      {/* Mobile Sidebar Overlay */}
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       <AnimatePresence>
-        {isSidebarOpen && (
+        {isMobileMenuOpen && (
           <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" 
+            onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 shadow-xl lg:shadow-none
+        fixed lg:static inset-y-0 left-0 z-50
+        w-72 bg-slate-900 text-white flex flex-col
+        border-r border-slate-800
         transform transition-transform duration-300 ease-in-out
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="h-full flex flex-col">
-          {/* Header */}
-          <div className="h-20 flex items-center px-8 border-b border-slate-100">
-            <ShieldCheck className="w-8 h-8 text-blue-600 mr-3" />
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">
-              Aarog<span className="font-light text-slate-400">Vault</span>
-            </span>
-            <button onClick={() => setIsSidebarOpen(false)} className="ml-auto lg:hidden text-slate-400">
-              <X className="w-6 h-6" />
-            </button>
+        <div className="h-24 flex items-center px-8 border-b border-slate-800/50">
+          <Shield className="w-8 h-8 text-emerald-400 mr-3" />
+          <div>
+            <h1 className="font-bold text-xl tracking-tight text-white">SecureMed</h1>
+            <p className="text-xs text-emerald-400/80 font-medium">Privacy-First AI</p>
           </div>
+          <button className="ml-auto lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <X className="w-6 h-6 text-slate-400" />
+          </button>
+        </div>
 
-          {/* Nav */}
-          <nav className="flex-1 p-6 space-y-2">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => { navigate(item.path); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 group ${
-                    isActive 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'
-                  }`}
-                >
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-500'}`} />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+        <nav className="flex-1 px-6 py-8 space-y-3">
+          <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Platform</p>
+          <SidebarItem to="/" icon={LayoutDashboard} label={role === 'doctor' ? "Command Center" : "My Vault"} />
+          
+          {/* Only Patients see Upload */}
+          {role === 'patient' && (
+            <SidebarItem to="/upload" icon={UploadCloud} label="Secure Upload" />
+          )}
+          
+          <SidebarItem to="/chat" icon={MessageSquare} label={role === 'doctor' ? "Patient Query AI" : "AI Assistant"} />
+        </nav>
 
-          {/* User Footer */}
-          <div className="p-6 border-t border-slate-100">
-            <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3 mb-4 border border-slate-100">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border-2 border-white shadow-sm">
-                {user?.full_name?.charAt(0) || 'U'}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold text-slate-900 truncate">{user?.full_name || 'Mock User'}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-              </div>
+        <div className="p-6 border-t border-slate-800/50">
+          <div className="bg-slate-800/50 rounded-xl p-4 mb-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg ${role === 'doctor' ? 'bg-blue-600' : 'bg-emerald-500'}`}>
+              {role === 'doctor' ? <Stethoscope className="w-5 h-5" /> : <User className="w-5 h-5" />}
             </div>
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-red-600 hover:bg-red-50 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <LogOut className="w-4 h-4" /> Sign Out
-            </button>
+            <div className="overflow-hidden">
+              <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'User'}</p>
+              <p className="text-xs text-slate-400 truncate capitalize">{role}</p>
+            </div>
           </div>
+          <button 
+            onClick={handleLogout} 
+            className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all w-full group"
+          >
+            <LogOut className="w-5 h-5 group-hover:text-red-400" />
+            <span className="font-medium">Lock Vault & Exit</span>
+          </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-screen">
-        {/* Mobile Header */}
-        <header className="h-16 lg:hidden bg-white border-b border-slate-200 flex items-center px-4 justify-between shrink-0 z-30">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600">
-            <Menu className="w-6 h-6" />
-          </button>
-          <span className="font-bold text-slate-700">AarogVault</span>
-          <div className="w-6" /> {/* Spacer */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-50">
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-8 sticky top-0 z-30">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl font-bold text-slate-800 hidden sm:block">
+              {role === 'doctor' ? 'Physician Portal' : 'Patient Vault'}
+            </h2>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 text-xs font-semibold shadow-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              System Secure
+            </div>
+          </div>
         </header>
 
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative scroll-smooth">
-           <Outlet />
-        </div>
-      </main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8 scroll-smooth">
+          <div className="max-w-6xl mx-auto w-full">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

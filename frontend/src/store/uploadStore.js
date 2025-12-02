@@ -1,32 +1,34 @@
 import { create } from 'zustand';
 
 export const useUploadStore = create((set) => ({
-  step: 1, // 1: Drop, 2: OCR, 3: Anonymize, 4: Encrypt
+  // State
+  currentStep: 1,
   file: null,
   processedImage: null,
   rawText: "",
   anonymizedText: "",
   isProcessing: false,
-  uploadStatus: 'idle', // idle, encrypting, uploading, success, error
+  uploadStatus: "idle", // idle | encrypting | uploading | success | error
   reportId: null,
 
-  setStep: (step) => set({ step }),
+  // Actions
+  setStep: (step) => set({ currentStep: step }),
   setFile: (file) => set({ file }),
-  setProcessedImage: (img) => set({ processedImage: img }),
+  setProcessedImage: (url) => set({ processedImage: url }),
   setRawText: (text) => set({ rawText: text }),
   setAnonymizedText: (text) => set({ anonymizedText: text }),
-  setIsProcessing: (isProcessing) => set({ isProcessing }),
+  setIsProcessing: (status) => set({ isProcessing: status }),
   setUploadStatus: (status) => set({ uploadStatus: status }),
   setReportId: (id) => set({ reportId: id }),
   
-  reset: () => set({ 
-    step: 1, 
-    file: null, 
-    processedImage: null, 
-    rawText: "", 
-    anonymizedText: "", 
-    isProcessing: false, 
-    uploadStatus: 'idle', 
-    reportId: null 
+  reset: () => set({
+    currentStep: 1,
+    file: null,
+    processedImage: null,
+    rawText: "",
+    anonymizedText: "",
+    isProcessing: false,
+    uploadStatus: "idle",
+    reportId: null
   })
 }));
