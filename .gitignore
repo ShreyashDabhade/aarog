@@ -46,3 +46,41 @@ frontend/.DS_Store
 backend/docs/*.pem
 docs/*.pem
 local_secrets/
+
+# Node (root)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+
+# Packaging / wheels
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Caches & tooling
+.mypy_cache/
+.ruff_cache/
+.cache/
+__pycache__/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local env files
+.env.local
+.env.*.local
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Mac
+.DS_Store
+

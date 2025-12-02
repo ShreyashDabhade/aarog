@@ -1,17 +1,18 @@
 import os
 import uuid
-from typing import List, Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Body, status
+from typing import List
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 # Internal imports
-from . import models, tasks, auth, database
+from . import models, auth, database, deps
+from .config import settings
 from .database import engine, get_db
 from .tasks import process_document_task
 from .agent_runner import run_query
+from .routers import auth as auth_router 
 
 # Create Tables
 models.Base.metadata.create_all(bind=engine)
@@ -26,94 +27,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Pydantic Models for API ---
-class UserRegister(BaseModel):
-    email: str
-    password: str
-    role: str = "patient"
-    public_key_pem: str  # Client generates this
-    encrypted_private_key: str
+# Include the new Auth Router
+app.include_router(auth_router.router)
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    role: str
-    user_id: int
-
+# --- Pydantic Models ---
 class DualUploadPayload(BaseModel):
     filename: str
-    
-    # Pipeline A: RAG (Anonymized Data) -> Sent to Server for Processing
     anon_cipher: str
     anon_iv: str
-    anon_key_server: str 
-    
-    # Pipeline B: Storage (Original Data) -> Stored in Postgres for Patient
+    anon_key_server: str
     original_cipher: str
     original_iv: str
-    original_key_patient: str 
+    original_key_patient: str
 
 class ShareRequest(BaseModel):
     report_id: str
     doctor_email: str
     encrypted_key_for_doctor: str
 
-# --- AUTH ENDPOINTS ---
-
-@app.post("/register", response_model=Token)
-def register(user: UserRegister, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = auth.get_password_hash(user.password)
-    new_user = models.User(
-        email=user.email,
-        hashed_password=hashed_password,
-        role=user.role,
-        public_key_pem=user.public_key_pem,
-        encrypted_private_key=user.encrypted_private_key
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    access_token = auth.create_access_token(data={"sub": new_user.email})
-    return {"access_token": access_token, "token_type": "bearer", "role": new_user.role, "user_id": new_user.id}
-
-@app.post("/token", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # FIX: Now accepts standard Form Data (username/password)
-    # Note: OAuth2 spec uses 'username' field, even if we use emails
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
-    access_token = auth.create_access_token(data={"sub": user.email})
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer", 
-        "role": user.role,
-        "encrypted_private_key": user.encrypted_private_key 
-    }
-
-@app.get("/users/public-key")
-def get_user_public_key(email: str, db: Session = Depends(get_db)):
-    """Used by patients to get a doctor's public key for sharing."""
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"public_key": user.public_key_pem}
-
-# --- SECURE UPLOAD & RAG ---
+# --- ENDPOINTS ---
 
 @app.get("/server_pubkey.pem")
 def get_server_public_key():
-    path = "docs/server_pubkey.pem"
-    if not os.path.exists(path):
-        raise HTTPException(500, detail="Server keys not configured.")
-    with open(path, "r") as f:
+    if not os.path.exists(settings.SERVER_PUB_KEY_PATH):
+        raise HTTPException(500, "Server keys not configured.")
+    with open(settings.SERVER_PUB_KEY_PATH, "r") as f:
         return {"public_key": f.read()}
 
 @app.post("/upload-record")
@@ -147,8 +85,6 @@ async def upload_medical_record(
     
     return {"status": "securely_stored", "report_id": report_id, "task_id": str(task)}
 
-# --- DIGILOCKER: VIEW & SHARE ---
-
 @app.get("/my-records")
 def get_my_records(
     current_user: models.User = Depends(auth.get_current_user),
@@ -158,12 +94,9 @@ def get_my_records(
 
 @app.get("/shared-with-me")
 def get_shared_records(
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: models.User = Depends(deps.require_doctor), # <--- USING NEW DEP
     db: Session = Depends(get_db)
 ):
-    if current_user.role != "doctor":
-        raise HTTPException(403, detail="Only doctors can view shared records")
-        
     shared = db.query(models.SharedReport).filter(models.SharedReport.doctor_id == current_user.id).all()
     results = []
     for share in shared:
@@ -177,6 +110,13 @@ def get_shared_records(
         })
     return results
 
+@app.get("/users/public-key")
+def get_user_public_key(email: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"public_key": user.public_key_pem}
+
 @app.post("/share-record")
 def share_record_with_doctor(
     req: ShareRequest,
@@ -185,11 +125,11 @@ def share_record_with_doctor(
 ):
     report = db.query(models.Report).filter(models.Report.id == req.report_id, models.Report.owner_id == current_user.id).first()
     if not report:
-        raise HTTPException(404, detail="Report not found or access denied")
+        raise HTTPException(404, "Report not found or access denied")
         
     doctor = db.query(models.User).filter(models.User.email == req.doctor_email).first()
     if not doctor:
-        raise HTTPException(404, detail="Doctor not found")
+        raise HTTPException(404, "Doctor not found")
         
     share = models.SharedReport(
         report_id=report.id,
@@ -207,5 +147,4 @@ async def query_agent(q: str, current_user: models.User = Depends(auth.get_curre
         answer = run_query(q)
         return {"answer": answer}
     except Exception as e:
-        print(f"Agent Error: {e}")
-        return {"answer": "I encountered an internal error while processing your request."}
+        return {"answer": "Error processing request."}

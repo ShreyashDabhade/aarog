@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Tesseract from 'tesseract.js';
-import { Shield, Upload, Eye, Activity, User, FileText, Share2, LogOut } from 'lucide-react';
+import { Shield, Search, Lock, Upload, Eye, Activity, CheckCircle, User, FileText, Share2, LogOut, Terminal, X, ChevronRight, Menu, Edit3 } from 'lucide-react';
 import { nerService } from './ner_service';
 
 const API_URL = "http://localhost:8000";
@@ -15,7 +15,6 @@ const CryptoManager = {
     let keyStr = localStorage.getItem("user_key_pair");
     if (keyStr) {
       const keys = JSON.parse(keyStr);
-      // Import back to CryptoKey objects
       const privateKey = await window.crypto.subtle.importKey(
         "jwk", keys.privateKey, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]
       );
@@ -25,17 +24,13 @@ const CryptoManager = {
       return { privateKey, publicKey, pem: keys.pem };
     }
 
-    // Generate New
     const keyPair = await window.crypto.subtle.generateKey(
       { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
       true, ["encrypt", "decrypt"]
     );
 
-    // Export for storage
     const exportedPub = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const exportedPriv = await window.crypto.subtle.exportKey("jwk", keyPair.privateKey);
-    
-    // Export PEM for Server Registration
     const spki = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
     const pem = `-----BEGIN PUBLIC KEY-----\n${btoa(String.fromCharCode(...new Uint8Array(spki)))}\n-----END PUBLIC KEY-----`;
 
@@ -53,9 +48,9 @@ const CryptoManager = {
 
   // 2. ENCRYPTION
   encryptAES: async (textOrBuffer) => {
+    const encoded = typeof textOrBuffer === 'string' ? new TextEncoder().encode(textOrBuffer) : textOrBuffer;
     const key = await window.crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const encoded = typeof textOrBuffer === 'string' ? new TextEncoder().encode(textOrBuffer) : textOrBuffer;
     const cipher = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
     return { key, iv: buf2hex(iv), cipher: buf2hex(cipher) };
   },
@@ -66,7 +61,7 @@ const CryptoManager = {
     return buf2hex(encrypted);
   },
 
-  // 3. DECRYPTION (For Viewing Files)
+  // 3. DECRYPTION
   decryptRSA: async (cipherHex, privateKey) => {
     const buffer = hex2buf(cipherHex);
     const decrypted = await window.crypto.subtle.decrypt(
@@ -85,45 +80,32 @@ const CryptoManager = {
       aesKey,
       cipherBuffer
     );
-    return decrypted; // Returns ArrayBuffer of the file
+    return decrypted; 
   },
 
-  // 4. KEY WRAPPING (For Cross-Browser Access)
+  // 4. KEY WRAPPING (Cross-Browser Access)
   deriveKeyFromPassword: async (password, salt) => {
     const enc = new TextEncoder();
     const keyMaterial = await window.crypto.subtle.importKey(
       "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
     );
     return window.crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: enc.encode(salt),
-        iterations: 100000,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"]
+      { name: "PBKDF2", salt: enc.encode(salt), iterations: 100000, hash: "SHA-256" },
+      keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
     );
   },
 
   encryptPrivateKeyWithPassword: async (privateKeyPem, password) => {
-    const salt = "static_salt_for_demo"; // Production should use random salt
+    const salt = "static_salt_for_demo"; 
     const wrappingKey = await CryptoManager.deriveKeyFromPassword(password, salt);
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const enc = new TextEncoder();
     
     const encrypted = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      wrappingKey,
-      enc.encode(privateKeyPem)
+      { name: "AES-GCM", iv }, wrappingKey, enc.encode(privateKeyPem)
     );
 
-    return JSON.stringify({
-      iv: buf2hex(iv),
-      cipher: buf2hex(encrypted)
-    });
+    return JSON.stringify({ iv: buf2hex(iv), cipher: buf2hex(encrypted) });
   },
 
   decryptPrivateKeyWithPassword: async (encryptedPackageStr, password) => {
@@ -132,41 +114,51 @@ const CryptoManager = {
     const wrappingKey = await CryptoManager.deriveKeyFromPassword(password, salt);
     
     const decryptedBuffer = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: hex2buf(pkg.iv) },
-      wrappingKey,
-      hex2buf(pkg.cipher)
+      { name: "AES-GCM", iv: hex2buf(pkg.iv) }, wrappingKey, hex2buf(pkg.cipher)
     );
 
     const dec = new TextDecoder();
-    return dec.decode(decryptedBuffer); // This is your Private Key PEM
+    return dec.decode(decryptedBuffer); 
   }
 };
 
+// --- UI COMPONENTS ---
+const StepIndicator = ({ num, title, active }) => (
+  <div className={`flex items-center gap-4 p-4 rounded-lg transition-all ${active ? 'bg-blue-50 border border-blue-100' : 'opacity-60'}`}>
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+      {num}
+    </div>
+    <span className={`text-base font-semibold ${active ? 'text-blue-900' : 'text-slate-500'}`}>{title}</span>
+    {active && <ChevronRight className="ml-auto w-5 h-5 text-blue-400" />}
+  </div>
+);
+
 const App = () => {
   const [token, setToken] = useState(localStorage.getItem("token"));
-  const [view, setView] = useState("auth"); // auth, dashboard, upload, chat
+  const [view, setView] = useState("auth"); 
   const [userRecords, setUserRecords] = useState([]);
   
-  // Login State
+  // Auth State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
-  // Upload State
+  // Upload Flow State
   const [file, setFile] = useState(null);
+  const [rawText, setRawText] = useState("");
+  const [anonymizedText, setAnonymizedText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  
+  const [step, setStep] = useState(1); // 1: Select, 2: OCR, 3: Review, 4: Encrypting, 5: Done
+  const [uploadReportId, setUploadReportId] = useState(null);
+
   // Chat State
   const [query, setQuery] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // Logging State
+  // Logs & UI
   const [logs, setLogs] = useState([]);
-
-  // LOGGING HELPER
-  const addLog = (msg) => {
-    console.log(msg);
-    setLogs(prev => [...prev, msg]);
-  };
+  const logsEndRef = useRef(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -174,6 +166,15 @@ const App = () => {
        fetchRecords();
     }
   }, [token]);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  const addLog = (msg) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `[${timestamp}] ${msg}`]);
+  };
 
   const fetchRecords = async () => {
     try {
@@ -188,31 +189,23 @@ const App = () => {
     addLog(isRegister ? "Starting Registration..." : "Starting Login...");
     try {
       if (isRegister) {
-        // 1. Generate New Keys Locally
-        addLog("Generating new 2048-bit RSA Keypair...");
+        addLog("Generating 2048-bit RSA Keypair...");
         const keys = await CryptoManager.getOrGenerateUserKeys(); 
         
-        // 2. Export Private Key to PEM for backup
         const privKeyExport = await window.crypto.subtle.exportKey("pkcs8", keys.privateKey);
         const privKeyPem = `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...new Uint8Array(privKeyExport)))}\n-----END PRIVATE KEY-----`;
 
-        // 3. Encrypt Private Key with Password
         addLog("Encrypting private key with password...");
         const encryptedPrivKey = await CryptoManager.encryptPrivateKeyWithPassword(privKeyPem, password);
 
-        // 4. Register on Server
-        const body = JSON.stringify({ 
-          email, 
-          password, 
-          public_key_pem: keys.pem, 
-          encrypted_private_key: encryptedPrivKey, 
-          role: "patient" 
-        });
-
-        const res = await fetch(`${API_URL}/register`, { 
+        const res = await fetch(`${API_URL}/auth/register`, { 
             method: "POST", 
             headers: { "Content-Type": "application/json" }, 
-            body 
+            body: JSON.stringify({ 
+              email, password, role: "patient",
+              public_key_pem: keys.pem, 
+              encrypted_private_key: encryptedPrivKey, 
+            })
         });
 
         const data = await res.json();
@@ -225,12 +218,13 @@ const App = () => {
         }
 
       } else {
-        // LOGIN FLOW
-        const body = new URLSearchParams({ username: email, password });
-        const res = await fetch(`${API_URL}/token`, { 
+        const res = await fetch(`${API_URL}/auth/token`, { 
             method: "POST", 
-            headers: { "Content-Type": "application/x-www-form-urlencoded" }, 
-            body 
+            headers: { "Content-Type": "application/json" }, // Changed to JSON for consistency if needed, but standard OAuth2 is form-data.
+            // Let's keep your original URLSearchParams if the backend expects form-data
+            // BUT Kanak's backend expects JSON body for login? No, my backend refactor put it in /token which usually is form.
+            // Let's use JSON body as defined in the new router
+            body: JSON.stringify({ username: email, password }) 
         });
         
         const data = await res.json();
@@ -239,103 +233,93 @@ const App = () => {
            setToken(data.access_token);
            addLog("Login Token Received.");
 
-           // 1. Check for Encrypted Key Backup
            if (data.encrypted_private_key) {
                addLog("Found secure key backup. Decrypting...");
-               
-               // 2. Decrypt Private Key
                const privKeyPem = await CryptoManager.decryptPrivateKeyWithPassword(data.encrypted_private_key, password);
                
-               // 3. Cleanup PEM formatting for import
-               const pemHeader = "-----BEGIN PRIVATE KEY-----";
-               const pemFooter = "-----END PRIVATE KEY-----";
-               const pemContents = privKeyPem.substring(
-                   pemHeader.length, 
-                   privKeyPem.length - pemFooter.length - 1 // remove newline if exists
-               ).replace(/\s/g, ''); // remove newlines inside
+               // Import Private Key Logic
+               const pemContents = privKeyPem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '');
+               const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-               const binaryDerString = atob(pemContents);
-               const binaryDer = new Uint8Array(binaryDerString.length);
-               for (let i = 0; i < binaryDerString.length; i++) {
-                   binaryDer[i] = binaryDerString.charCodeAt(i);
-               }
-
-               // 4. Import Private Key
                const privateKey = await window.crypto.subtle.importKey(
-                   "pkcs8",
-                   binaryDer.buffer,
-                   { name: "RSA-OAEP", hash: "SHA-256" },
-                   true,
-                   ["decrypt"]
+                   "pkcs8", binaryDer.buffer, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]
                );
 
-               // 5. Re-save to LocalStorage so CryptoManager finds it
-               // Note: Ideally we also fetch the public key to complete the pair, 
-               // but for decryption, only Private Key is needed.
-               // We will regenerate the JWK for storage consistency.
+               // Regenerate JWK for storage
                const exportedPriv = await window.crypto.subtle.exportKey("jwk", privateKey);
                
-               // We need a dummy or fetched public key to satisfy the object structure
-               // Fetch public key from backend if possible, or just store incomplete if only decrypting
-               // For now, let's fetch self public key
+               // Fetch self public key to complete pair
                const pubRes = await fetch(`${API_URL}/users/public-key?email=${email}`, { headers: { Authorization: `Bearer ${data.access_token}` }});
                const pubData = await pubRes.json();
-               
-               // Re-import Public Key
                const pubKeyObj = await CryptoManager.importServerKey(pubData.public_key);
                const exportedPub = await window.crypto.subtle.exportKey("jwk", pubKeyObj);
 
                localStorage.setItem("user_key_pair", JSON.stringify({ 
-                   privateKey: exportedPriv, 
-                   publicKey: exportedPub, 
-                   pem: pubData.public_key 
+                   privateKey: exportedPriv, publicKey: exportedPub, pem: pubData.public_key 
                }));
                addLog("Keys restored successfully!");
            }
         } else {
-          alert("Login Failed");
+          alert("Login Failed: " + data.detail);
         }
       }
     } catch (e) {
       console.error(e);
-      addLog("Error: " + e.message);
-      alert("Auth Error: " + e.message);
+      addLog("Auth Error: " + e.message);
     }
   };
 
-  const processAndUpload = async () => {
+  const handleFileSelect = async (e) => {
+    const f = e.target.files[0];
+    if(!f) return;
+    setFile(f);
+    setStep(2);
+    addLog(`File loaded: ${f.name}`);
+    
+    // Auto start OCR
+    addLog("Initializing Tesseract OCR...");
     setIsProcessing(true);
-    addLog("Starting Upload Process...");
-    try {
-      // 1. OCR & Anonymization
-      addLog("Running Local OCR...");
-      const { blob } = await preprocessImage(file);
-      const ocrRes = await Tesseract.recognize(blob, 'eng');
-      const cleanText = ocrRes.data.text.replace(/[|]/g, " ");
-      
-      addLog("Running PII Redaction (BERT)...");
-      const anonText = await nerService.anonymize(cleanText);
+    const { blob } = await preprocessImage(f);
+    const ocrRes = await Tesseract.recognize(blob, 'eng');
+    setRawText(ocrRes.data.text);
+    addLog(`OCR Complete. Confidence: ${ocrRes.data.confidence}%`);
+    setStep(3);
+    setIsProcessing(false);
+  };
 
-      // 2. Fetch Server Key
+  const runAnonymization = async () => {
+    addLog("Running PII Redaction (BERT + Regex)...");
+    // Clean text
+    let text = rawText.replace(/[|]/g, " "); 
+    const anon = await nerService.anonymize(text);
+    setAnonymizedText(anon);
+    addLog("Anonymization complete. Please Review.");
+  };
+
+  const processAndUpload = async () => {
+    setStep(4);
+    setIsProcessing(true);
+    addLog("Starting Secure Upload Pipeline...");
+    try {
+      // 1. Keys
+      addLog("Fetching Server Key & User Key...");
       const srvKeyRes = await fetch(`${API_URL}/server_pubkey.pem`);
       const { public_key: srvPem } = await srvKeyRes.json();
       const serverKey = await CryptoManager.importServerKey(srvPem);
-      
-      // 3. Get User Key
       const { publicKey: userKey } = await CryptoManager.getOrGenerateUserKeys();
 
-      // 4. Encrypt for AI Pipeline (Anonymized -> Server)
-      addLog("Encrypting for AI Pipeline...");
-      const aiEnc = await CryptoManager.encryptAES(anonText);
+      // 2. Encrypt for AI (Server)
+      addLog("Encrypting Anonymized Data for AI...");
+      const aiEnc = await CryptoManager.encryptAES(anonymizedText);
       const aiKeyEnc = await CryptoManager.encryptRSA(aiEnc.key, serverKey);
 
-      // 5. Encrypt for Storage Pipeline (Original File -> Patient)
-      addLog("Encrypting for Secure Storage...");
+      // 3. Encrypt for Storage (Patient)
+      addLog("Encrypting Original File for Storage...");
       const fileBuffer = await file.arrayBuffer();
       const storageEnc = await CryptoManager.encryptAES(new Uint8Array(fileBuffer));
       const storageKeyEnc = await CryptoManager.encryptRSA(storageEnc.key, userKey); 
 
-      // 6. Upload
+      // 4. Upload
       const payload = {
         filename: file.name,
         anon_cipher: aiEnc.cipher,
@@ -353,49 +337,38 @@ const App = () => {
       });
       
       if (res.ok) {
-        addLog("Upload Complete!");
-        alert("Secure Dual-Upload Complete!");
-        setView("dashboard");
+        const data = await res.json();
+        setUploadReportId(data.report_id);
+        setStep(5);
+        addLog("Upload Complete! ID: " + data.report_id);
         fetchRecords();
       } else {
-        alert("Upload Failed");
+        throw new Error("Server rejected upload");
       }
 
     } catch (e) {
       console.error(e);
-      alert("Error: " + e.message);
+      addLog("Error: " + e.message);
+      setStep(3); // Go back to review
     } finally {
       setIsProcessing(false);
     }
   };
-  
+
   const handleDecrypt = async (record) => {
     try {
-      console.log("Decrypting record:", record.id);
-      
-      // 1. Get User's Private Key
+      addLog(`Decrypting record: ${record.id.substring(0,8)}...`);
       const { privateKey } = await CryptoManager.getOrGenerateUserKeys();
-
-      // 2. Decrypt the AES Key (which was encrypted with RSA)
       const rawAesKey = await CryptoManager.decryptRSA(record.enc_aes_key_patient, privateKey);
       
-      // 3. Import the AES Key
       const aesKey = await window.crypto.subtle.importKey(
-        "raw", 
-        rawAesKey, 
-        { name: "AES-GCM", length: 256 }, 
-        true, 
-        ["encrypt", "decrypt"]
+        "raw", rawAesKey, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
       );
 
-      // 4. Decrypt the actual file content
       const fileBuffer = await CryptoManager.decryptAES(
-        record.original_ciphertext, 
-        record.original_iv, 
-        aesKey
+        record.original_ciphertext, record.original_iv, aesKey
       );
 
-      // 5. Open in new tab
       let mime = "application/octet-stream";
       if (record.filename.toLowerCase().endsWith(".png")) mime = "image/png";
       if (record.filename.toLowerCase().endsWith(".jpg")) mime = "image/jpeg";
@@ -405,10 +378,30 @@ const App = () => {
       const blob = new Blob([fileBuffer], { type: mime }); 
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
+      addLog("Decryption successful. Opening file...");
 
     } catch (error) {
-      console.error("Decryption failed:", error);
-      alert("Decryption failed! You may have lost your key or are using a different device without restoring keys.");
+      console.error(error);
+      addLog("Decryption Failed! Check keys.");
+      alert("Decryption failed! You may have lost your key.");
+    }
+  };
+
+  const handleChat = async () => {
+    if (!query) return;
+    const userMsg = { role: 'user', text: query };
+    setChatHistory(prev => [...prev, userMsg]);
+    setQuery("");
+    setIsChatLoading(true);
+
+    try {
+      const resp = await fetch(`${API_URL}/query?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${token}` }});
+      const data = await resp.json();
+      setChatHistory(prev => [...prev, userMsg, { role: 'bot', text: data.answer || "No response." }]);
+    } catch (err) {
+      setChatHistory(prev => [...prev, userMsg, { role: 'bot', text: "Error connecting to Agent." }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -426,8 +419,8 @@ const App = () => {
       });
   };
 
-  // --- UI RENDERING ---
-  
+  // --- RENDER ---
+
   if (!token) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
@@ -438,114 +431,204 @@ const App = () => {
           <button onClick={() => handleAuth(false)} className="flex-1 bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">Login</button>
           <button onClick={() => handleAuth(true)} className="flex-1 bg-slate-100 text-slate-800 p-3 rounded font-bold hover:bg-slate-200">Register</button>
         </div>
-        
-        {/* Logs Display for Auth Debugging */}
-        <div className="mt-4 p-2 bg-slate-900 text-green-400 text-xs font-mono rounded max-h-32 overflow-y-auto">
+        <div className="mt-4 p-2 bg-slate-950 text-green-400 text-xs font-mono rounded max-h-32 overflow-y-auto">
              {logs.length === 0 ? "Ready..." : logs.map((l, i) => <div key={i}>{l}</div>)}
         </div>
       </div>
     </div>
   );
 
-  if (view === "dashboard") return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col">
-        <h1 className="font-bold text-xl mb-8 flex items-center gap-2"><Shield className="text-blue-600"/> Digilocker</h1>
-        <button onClick={() => setView("dashboard")} className="flex items-center gap-3 p-3 bg-blue-50 text-blue-700 rounded-lg mb-2"><User size={18}/> My Records</button>
-        <button onClick={() => setView("upload")} className="flex items-center gap-3 p-3 text-slate-600 hover:bg-slate-50 rounded-lg"><Upload size={18}/> Upload New</button>
-        <button onClick={() => setView("chat")} className="flex items-center gap-3 p-3 text-slate-600 hover:bg-slate-50 rounded-lg"><Activity size={18}/> AI Assistant</button>
-        <button onClick={() => { localStorage.clear(); setToken(null); }} className="flex items-center gap-3 p-3 text-red-600 hover:bg-slate-50 rounded-lg mt-auto"><LogOut size={18}/> Logout</button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 p-8">
-        <h2 className="text-2xl font-bold mb-6">My Encrypted Records</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {userRecords.map(rec => (
-            <div key={rec.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-              <div className="flex justify-between items-start mb-4">
-                <FileText className="text-blue-500 w-8 h-8"/>
-                <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-mono">SECURE</span>
-              </div>
-              <h3 className="font-bold text-lg truncate">{rec.filename}</h3>
-              <p className="text-xs text-slate-400 mb-4">ID: {rec.id.substring(0,8)}...</p>
-              <div className="flex gap-2">
-                <button onClick={() => handleDecrypt(rec)} className="flex-1 py-2 border border-slate-200 rounded text-sm hover:bg-slate-50 flex justify-center items-center gap-1">
-                  <Eye size={14}/> View (Decrypt)
-                </button>
-                <button className="flex-1 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex justify-center items-center gap-1">
-                  <Share2 size={14}/> Share
-                </button>
-              </div>
+  return (
+    <div className="fixed inset-0 flex bg-slate-50 overflow-hidden font-sans text-slate-800">
+      
+      {/* SIDEBAR */}
+      <div className={`
+        fixed lg:static inset-y-0 left-0 z-50 
+        w-[85%] sm:w-[400px] lg:w-[450px]
+        flex flex-col border-r border-slate-200 bg-white h-full shadow-2xl lg:shadow-xl
+        transform transition-transform duration-300 ease-in-out
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <Shield className="w-8 h-8 text-blue-600" />
+              SecureMed
+            </h1>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">System Online</span>
             </div>
-          ))}
+          </div>
+          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-2 text-slate-500"><X/></button>
         </div>
-      </div>
-    </div>
-  );
 
-  if (view === "upload") return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl">
-        <h2 className="text-2xl font-bold mb-6">Secure Dual-Pipeline Upload</h2>
+        {/* Action Buttons */}
+        <div className="p-6 grid grid-cols-2 gap-4 border-b border-slate-100">
+            <button onClick={() => setView("dashboard")} className={`flex flex-col items-center justify-center p-4 rounded-xl border transition ${view==="dashboard"?"bg-blue-50 border-blue-200 text-blue-700":"hover:bg-slate-50"}`}>
+                <User size={24} className="mb-2"/> <span className="text-sm font-bold">Records</span>
+            </button>
+            <button onClick={() => setView("upload")} className={`flex flex-col items-center justify-center p-4 rounded-xl border transition ${view==="upload"?"bg-blue-50 border-blue-200 text-blue-700":"hover:bg-slate-50"}`}>
+                <Upload size={24} className="mb-2"/> <span className="text-sm font-bold">Upload</span>
+            </button>
+        </div>
+
+        {/* Status / Logs Area */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            {view === "upload" && (
+                <div className="space-y-4">
+                    <StepIndicator num={1} title="Local Ingestion" active={step <= 2} />
+                    <StepIndicator num={2} title="Review & Anonymize" active={step === 3} />
+                    <StepIndicator num={3} title="Zero-Trust Encryption" active={step >= 4} />
+                </div>
+            )}
+            
+            <div className="mt-6 p-4 bg-slate-950 text-green-400 font-mono text-xs h-64 overflow-y-auto border-t border-slate-800 rounded-xl shadow-inner">
+               <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
+                 <Terminal className="w-4 h-4" /> System Logs
+               </div>
+               <div ref={logsEndRef} />
+               {logs.map((log, i) => <div key={i} className="mb-2 break-words leading-snug">{log}</div>)}
+            </div>
+        </div>
         
-        <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center mb-6">
-           <input type="file" onChange={e => setFile(e.target.files[0])} />
+        <div className="p-4 border-t">
+            <button onClick={() => { localStorage.clear(); setToken(null); }} className="flex items-center gap-3 p-3 text-red-600 hover:bg-slate-50 rounded-lg w-full justify-center"><LogOut size={18}/> Logout</button>
+        </div>
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col h-full relative bg-slate-100 w-full overflow-hidden">
+        {/* Header */}
+        <div className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10 shrink-0">
+             <button className="lg:hidden p-2 text-slate-600" onClick={() => setMobileMenuOpen(true)}><Menu/></button>
+             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+               {view === "dashboard" ? "My Secure Records" : view === "upload" ? "Secure Upload Pipeline" : "AI Agent"}
+             </h2>
+             <div className="text-xs font-semibold text-slate-500 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
+                End-to-End Encrypted
+             </div>
         </div>
 
-        {isProcessing ? (
-           <div className="text-center py-8">
-             <Activity className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4"/>
-             <div className="text-slate-600 font-mono text-sm">
-                {logs.slice(-3).map((l, i) => <div key={i}>{l}</div>)}
-             </div>
-           </div>
-        ) : (
-           <div className="flex gap-4">
-             <button onClick={() => setView("dashboard")} className="flex-1 py-3 border rounded">Cancel</button>
-             <button onClick={processAndUpload} disabled={!file} className="flex-1 py-3 bg-green-600 text-white rounded font-bold hover:bg-green-700">
-               Encrypt & Upload
-             </button>
-           </div>
+        {/* View: Upload */}
+        {view === "upload" && (
+            <div className="flex-1 overflow-y-auto p-8">
+                <div className="max-w-3xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    
+                    {step <= 2 && (
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center cursor-pointer hover:bg-slate-50 transition relative">
+                            <input type="file" onChange={handleFileSelect} className="absolute inset-0 opacity-0 cursor-pointer" />
+                            <Upload className="w-12 h-12 text-blue-500 mx-auto mb-4"/>
+                            <p className="text-lg font-semibold text-slate-700">Click to Upload Medical Report</p>
+                            <p className="text-sm text-slate-400">Processed entirely in browser</p>
+                        </div>
+                    )}
+
+                    {step === 3 && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-red-50 rounded-lg border border-red-100 text-xs">
+                                    <div className="font-bold text-red-800 mb-2 flex items-center gap-2"><Eye className="w-3 h-3"/> RAW PHI</div>
+                                    <div className="h-40 overflow-y-auto">{rawText}</div>
+                                </div>
+                                <div className="p-4 bg-green-50 rounded-lg border border-green-100 text-xs">
+                                    <div className="font-bold text-green-800 mb-2 flex items-center gap-2"><Edit3 className="w-3 h-3"/> REDACTED</div>
+                                    <textarea className="w-full h-40 bg-transparent border-none outline-none resize-none" value={anonymizedText} onChange={e => setAnonymizedText(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <button onClick={runAnonymization} className="flex-1 py-3 bg-blue-100 text-blue-700 rounded-lg font-bold">Sanitize</button>
+                                <button onClick={processAndUpload} className="flex-1 py-3 bg-slate-900 text-white rounded-lg font-bold">Encrypt & Upload</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {step >= 4 && (
+                        <div className="text-center py-12">
+                            {step === 4 ? (
+                                <>
+                                    <Activity className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-6"/>
+                                    <h3 className="text-xl font-bold text-slate-800">Encrypting & Uploading...</h3>
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6"/>
+                                    <h3 className="text-xl font-bold text-green-700">Upload Complete!</h3>
+                                    <p className="text-slate-500 mt-2">ID: {uploadReportId}</p>
+                                    <button onClick={() => { setView("dashboard"); setStep(1); }} className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg">View Records</button>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
         )}
+
+        {/* View: Dashboard & Chat (Split View) */}
+        {view === "dashboard" && (
+            <div className="flex-1 flex overflow-hidden">
+                {/* Records List */}
+                <div className="flex-1 overflow-y-auto p-8 border-r border-slate-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {userRecords.map(rec => (
+                            <div key={rec.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-2 bg-blue-50 rounded-lg"><FileText className="text-blue-600 w-6 h-6"/></div>
+                                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded font-bold tracking-wide">AES-256</span>
+                                </div>
+                                <h3 className="font-bold text-slate-800 truncate mb-1">{rec.filename}</h3>
+                                <p className="text-xs text-slate-400 mb-6 font-mono">ID: {rec.id.substring(0,8)}...</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleDecrypt(rec)} className="flex-1 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-black flex items-center justify-center gap-2">
+                                        <Eye size={14}/> Decrypt
+                                    </button>
+                                    <button className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"><Share2 size={16}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Chat Panel (Right Side) */}
+                <div className="w-[400px] bg-white flex flex-col border-l border-slate-200 shadow-xl">
+                    <div className="p-4 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-blue-600"/> Clinical Assistant
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                        {chatHistory.length === 0 && (
+                            <div className="text-center text-slate-400 mt-10">
+                                <Search className="w-12 h-12 mx-auto mb-2 opacity-20"/>
+                                <p className="text-sm">Ask questions about your uploaded reports.</p>
+                            </div>
+                        )}
+                        {chatHistory.map((msg, i) => (
+                            <div key={i} className={`p-3 rounded-lg text-sm ${msg.role==='user'?'bg-blue-600 text-white ml-auto max-w-[80%]':'bg-white border border-slate-200 text-slate-700 mr-auto max-w-[90%]'}`}>
+                                {msg.text}
+                            </div>
+                        ))}
+                        {isChatLoading && <div className="text-xs text-slate-400 animate-pulse ml-2">Agent is thinking...</div>}
+                    </div>
+                    <div className="p-4 border-t border-slate-100 bg-white">
+                        <div className="relative">
+                            <input 
+                                className="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                placeholder="Ask a question..."
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleChat()}
+                            />
+                            <button onClick={handleChat} className="absolute right-2 top-2 p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
+                                <ChevronRight size={16}/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );
-  
-  if (view === "chat") return (
-      <div className="min-h-screen bg-slate-50 p-8 flex flex-col">
-          <div className="flex-1 bg-white rounded-2xl shadow-sm p-6 mb-4 overflow-y-auto">
-              {chatHistory.map((msg, i) => (
-                  <div key={i} className={`p-4 mb-2 rounded-lg ${msg.role === 'user' ? 'bg-blue-100 ml-auto max-w-lg' : 'bg-slate-100 mr-auto max-w-lg'}`}>
-                      {msg.text}
-                  </div>
-              ))}
-          </div>
-          <div className="flex gap-2">
-              <input 
-                  className="flex-1 p-4 rounded-xl border border-slate-300" 
-                  placeholder="Ask about your records..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-              />
-              <button 
-                  className="bg-blue-600 text-white px-6 rounded-xl font-bold"
-                  onClick={async () => {
-                      const newHistory = [...chatHistory, {role: 'user', text: query}];
-                      setChatHistory(newHistory);
-                      setQuery("");
-                      const res = await fetch(`${API_URL}/query?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${token}` }});
-                      const data = await res.json();
-                      setChatHistory([...newHistory, {role: 'bot', text: data.answer}]);
-                  }}
-              >Send</button>
-              <button onClick={() => setView("dashboard")} className="px-4 text-slate-500">Back</button>
-          </div>
-      </div>
-  );
-
-  return null;
 };
 
 export default App;
