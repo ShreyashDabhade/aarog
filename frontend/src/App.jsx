@@ -74,6 +74,12 @@ const App = () => {
   // Login State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [logs, setLogs] = useState([]);
+  const addLog = (message) => {
+    console.log(message); // Log to console for debugging
+    // Optional: Only strictly necessary if you plan to render {logs} in your JSX
+    setLogs(prev => [...prev, message]); 
+  };
   
   // Upload State
   const [file, setFile] = useState(null);
@@ -98,24 +104,51 @@ const App = () => {
   };
 
   const handleAuth = async (isRegister) => {
-    const keys = await CryptoManager.getOrGenerateUserKeys(); // Ensure keys exist
+    let keys = { pem: "" };
+    
+    if (isRegister) {
+      // Only generate keys on register
+      addLog("Generating secure keys on device...");
+      keys = await CryptoManager.getOrGenerateUserKeys();
+    }
+
     const endpoint = isRegister ? "/register" : "/token";
     
-    // For login we send form-data, for register JSON
-    const body = isRegister 
-      ? JSON.stringify({ email, password, public_key_pem: keys.pem, role: "patient" })
-      : new URLSearchParams({ username: email, password }); // OAuth2 standard
-
-    const headers = isRegister ? { "Content-Type": "application/json" } : { "Content-Type": "application/x-www-form-urlencoded" };
-
-    const res = await fetch(`${API_URL}${endpoint}`, { method: "POST", headers, body });
-    const data = await res.json();
+    // LOGIN: Form Data (application/x-www-form-urlencoded)
+    // REGISTER: JSON (application/json)
     
-    if (res.ok) {
-      localStorage.setItem("token", data.access_token);
-      setToken(data.access_token);
+    let body;
+    let headers = {};
+
+    if (isRegister) {
+      headers = { "Content-Type": "application/json" };
+      body = JSON.stringify({ 
+        email, 
+        password, 
+        public_key_pem: keys.pem, 
+        role: "patient" 
+      });
     } else {
-      alert(data.detail || "Auth Failed");
+      headers = { "Content-Type": "application/x-www-form-urlencoded" };
+      body = new URLSearchParams({ 
+        username: email, // OAuth2 expects 'username', not 'email'
+        password: password 
+      });
+    }
+
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, { method: "POST", headers, body });
+      const data = await res.json();
+      
+      if (res.ok) {
+        localStorage.setItem("token", data.access_token);
+        setToken(data.access_token);
+        addLog("Authentication successful.");
+      } else {
+        alert(data.detail || "Auth Failed");
+      }
+    } catch (err) {
+      alert("Network Error: Is backend running?");
     }
   };
 

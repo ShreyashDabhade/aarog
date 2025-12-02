@@ -3,6 +3,7 @@ import uuid
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Body, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm  # <--- CRITICAL IMPORT
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -44,17 +45,17 @@ class DualUploadPayload(BaseModel):
     # Pipeline A: RAG (Anonymized Data) -> Sent to Server for Processing
     anon_cipher: str
     anon_iv: str
-    anon_key_server: str # AES key encrypted with SERVER PubKey
+    anon_key_server: str 
     
     # Pipeline B: Storage (Original Data) -> Stored in Postgres for Patient
     original_cipher: str
     original_iv: str
-    original_key_patient: str # AES key encrypted with PATIENT PubKey
+    original_key_patient: str 
 
 class ShareRequest(BaseModel):
     report_id: str
     doctor_email: str
-    encrypted_key_for_doctor: str # Client does the re-encryption
+    encrypted_key_for_doctor: str
 
 # --- AUTH ENDPOINTS ---
 
@@ -79,13 +80,12 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer", "role": new_user.role, "user_id": new_user.id}
 
 @app.post("/token", response_model=Token)
-def login(form_data: dict = Body(...), db: Session = Depends(get_db)):
-    # Note: In production use OAuth2PasswordRequestForm
-    email = form_data.get("username") # OAuth2 expects 'username' field
-    password = form_data.get("password")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # FIX: Now accepts standard Form Data (username/password)
+    # Note: OAuth2 spec uses 'username' field, even if we use emails
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
     
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user or not auth.verify_password(password, user.hashed_password):
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     
     access_token = auth.create_access_token(data={"sub": user.email})
@@ -105,7 +105,7 @@ def get_user_public_key(email: str, db: Session = Depends(get_db)):
 def get_server_public_key():
     path = "docs/server_pubkey.pem"
     if not os.path.exists(path):
-        raise HTTPException(500, "Server keys not configured.")
+        raise HTTPException(500, detail="Server keys not configured.")
     with open(path, "r") as f:
         return {"public_key": f.read()}
 
@@ -115,11 +115,6 @@ async def upload_medical_record(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Handles the Dual-Pipeline:
-    1. Stores encrypted original in Postgres (Zero-Knowledge storage).
-    2. Sends encrypted anonymized version to Celery for RAG indexing.
-    """
     report_id = str(uuid.uuid4())
     
     # 1. Store Original in DB
@@ -135,8 +130,7 @@ async def upload_medical_record(
     db.add(new_report)
     db.commit()
     
-    # 2. Send Anon Data to Celery for RAG
-    # Note: We send the "anon_key_server" which is encrypted for the SERVER's private key
+    # 2. Send Anon Data to Celery
     task = process_document_task.delay(
         report_id=report_id,
         enc_aes_key_hex=payload.anon_key_server,
@@ -153,7 +147,6 @@ def get_my_records(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Returns list of encrypted blobs for the dashboard."""
     return db.query(models.Report).filter(models.Report.owner_id == current_user.id).all()
 
 @app.get("/shared-with-me")
@@ -161,12 +154,10 @@ def get_shared_records(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """For Doctors: Get records shared with them."""
     if current_user.role != "doctor":
-        raise HTTPException(403, "Only doctors can view shared records")
+        raise HTTPException(403, detail="Only doctors can view shared records")
         
     shared = db.query(models.SharedReport).filter(models.SharedReport.doctor_id == current_user.id).all()
-    # Construct response with the re-encrypted key
     results = []
     for share in shared:
         report = share.report
@@ -175,7 +166,7 @@ def get_shared_records(
             "filename": report.filename,
             "original_ciphertext": report.original_ciphertext,
             "original_iv": report.original_iv,
-            "enc_aes_key": share.enc_aes_key_doctor # Key encrypted for this doctor
+            "enc_aes_key": share.enc_aes_key_doctor
         })
     return results
 
@@ -185,20 +176,14 @@ def share_record_with_doctor(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Patient (Client) fetches Doc's PubKey -> Re-encrypts AES Key -> Sends here.
-    """
-    # 1. Find Report
     report = db.query(models.Report).filter(models.Report.id == req.report_id, models.Report.owner_id == current_user.id).first()
     if not report:
-        raise HTTPException(404, "Report not found or access denied")
+        raise HTTPException(404, detail="Report not found or access denied")
         
-    # 2. Find Doctor
     doctor = db.query(models.User).filter(models.User.email == req.doctor_email).first()
     if not doctor:
-        raise HTTPException(404, "Doctor not found")
+        raise HTTPException(404, detail="Doctor not found")
         
-    # 3. Create Share Entry
     share = models.SharedReport(
         report_id=report.id,
         doctor_id=doctor.id,
@@ -211,9 +196,9 @@ def share_record_with_doctor(
 
 @app.get("/query")
 async def query_agent(q: str, current_user: models.User = Depends(auth.get_current_user)):
-    # RAG Agent Logic (Same as before, but authenticated)
     try:
         answer = run_query(q)
         return {"answer": answer}
     except Exception as e:
-        return {"answer": "Error processing request."}
+        print(f"Agent Error: {e}")
+        return {"answer": "I encountered an internal error while processing your request."}
