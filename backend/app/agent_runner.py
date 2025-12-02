@@ -8,7 +8,7 @@ from langchain.prompts import PromptTemplate
 from .agent_tools import search_medical_reports, get_current_date
 
 # --- CONFIG ---
-LLM_MODEL = "gemini-2.5-pro"
+LLM_MODEL = "gemini-2.5-flash"
 
 REACT_PROMPT = """
 You are a Privacy-First Medical Assistant. You answer questions based ONLY on the provided medical reports.

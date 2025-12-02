@@ -14,6 +14,9 @@ class User(Base):
     # Public Key for "Digilocker" functionality (Zero-Knowledge Sharing)
     public_key_pem = Column(Text) 
 
+    # NEW: Store the Private Key (Encrypted with User Password)
+    encrypted_private_key = Column(Text)
+    
     reports = relationship("Report", back_populates="owner")
     shared_reports = relationship("SharedReport", back_populates="doctor")
 

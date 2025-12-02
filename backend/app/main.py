@@ -3,7 +3,7 @@ import uuid
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Body, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm  # <--- CRITICAL IMPORT
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ class UserRegister(BaseModel):
     password: str
     role: str = "patient"
     public_key_pem: str  # Client generates this
+    encrypted_private_key: str
 
 class Token(BaseModel):
     access_token: str
@@ -70,7 +71,8 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
         email=user.email,
         hashed_password=hashed_password,
         role=user.role,
-        public_key_pem=user.public_key_pem
+        public_key_pem=user.public_key_pem,
+        encrypted_private_key=user.encrypted_private_key
     )
     db.add(new_user)
     db.commit()
@@ -89,7 +91,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     
     access_token = auth.create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer", "role": user.role, "user_id": user.id}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer", 
+        "role": user.role,
+        "encrypted_private_key": user.encrypted_private_key 
+    }
 
 @app.get("/users/public-key")
 def get_user_public_key(email: str, db: Session = Depends(get_db)):
