@@ -17,7 +17,7 @@ const Login = () => {
     try {
       // NOTE: Your backend /auth/token expects JSON body (username, password)
       // based on the provided routers/auth.py file.
-      const resp = await fetch('http://localhost:8000/auth/token', {
+      const resp = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/auth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: formData.email, password: formData.password })
@@ -46,7 +46,7 @@ const Login = () => {
       const privateKeyObj = await cryptoService.importPrivateKey(privateKeyPem);
 
       // 4. Fetch Public Key to complete the pair (for local encryption ops)
-      const pubKeyResp = await fetch(`http://localhost:8000/users/public-key?email=${formData.email}`, {
+      const pubKeyResp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/public-key?email=${formData.email}`, {
           headers: { Authorization: `Bearer ${data.access_token}` }
       });
       const pubKeyData = await pubKeyResp.json();

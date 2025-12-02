@@ -14,7 +14,7 @@ const PatientDashboard = () => {
     const fetchReports = async () => {
       setIsLoading(true);
       try {
-        const resp = await fetch('http://localhost:8000/my-records', {
+        const resp = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/my-records', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 

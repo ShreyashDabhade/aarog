@@ -168,7 +168,7 @@ const EncryptAndUpload = () => {
       setUploadStatus('encrypting');
       try {
         // 1. Get Server Public Key
-        const serverKeyResp = await fetch(`http://localhost:8000/server_pubkey.pem`);
+        const serverKeyResp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/server_pubkey.pem`);
         if (!serverKeyResp.ok) throw new Error("Backend server key unreachable");
         const { public_key: serverPem } = await serverKeyResp.json();
 
@@ -199,7 +199,7 @@ const EncryptAndUpload = () => {
           original_key_patient: vaultKeyEnc
         };
 
-        const resp = await fetch('http://localhost:8000/upload-record', {
+        const resp = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/upload-record', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(payload)

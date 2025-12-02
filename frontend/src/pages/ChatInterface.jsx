@@ -24,7 +24,7 @@ const ChatInterface = () => {
     setLoading(true);
 
     try {
-      const resp = await fetch(`http://localhost:8000/query?q=${encodeURIComponent(query)}`, {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/query?q=${encodeURIComponent(query)}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
