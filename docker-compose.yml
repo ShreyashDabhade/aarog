@@ -1,28 +1,9 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
-    container_name: med_postgres_final
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: med_privacy_db
-    ports:
-      - "5433:5432"  # Mapping external 5433 to internal 5432
-    volumes:
-      - postgres_data_fresh:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d med_privacy_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
+  
   redis:
     image: redis:alpine
     container_name: med_redis
     ports:
       - "6379:6379"
-
-volumes:
-  postgres_data_fresh:
