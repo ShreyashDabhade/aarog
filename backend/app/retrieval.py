@@ -4,7 +4,12 @@ import uuid
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+try:
+    # Old path (langchain < 0.3) – probably missing in your setup
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+except ImportError:
+    # New path (langchain 1.x)
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # --- CONFIG ---
 CHROMA_DB_DIR = "data/chroma"

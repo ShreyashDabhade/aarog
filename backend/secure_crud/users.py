@@ -1,7 +1,9 @@
 # backend/secure_crud/users.py
 
 from sqlalchemy.orm import Session
-
+from secure_core.security import hash_password, verify_password, generate_user_keypair
+from secure_models.user import SecureUser
+from secure_db.session import SessionLocal
 from secure_models.user import SecureUser
 from secure_core.security import (
     hash_password,
@@ -15,27 +17,20 @@ def get_user_by_email(db: Session, email: str) -> SecureUser | None:
     return db.query(SecureUser).filter(SecureUser.email == email).first()
 
 
-def create_user(
-    db: Session,
-    email: str,
-    password: str,
-    role: str = "patient",
-) -> SecureUser:
-    """
-    Create a new user with:
-    - hashed password
-    - generated RSA keypair (private+public)
-    """
-    private_key, public_key = generate_user_keypair()
+def create_user(db, email: str, password: str, role: str = "patient"):
+    existing = db.query(SecureUser).filter(SecureUser.email == email).first()
+    if existing:
+        raise ValueError("User already exists")  # or HTTPException in router
+
+    priv_pem, pub_pem = generate_user_keypair()
 
     user = SecureUser(
         email=email,
         password_hash=hash_password(password),
         role=role,
-        public_key=public_key,
-        private_key=private_key,  # later you can encrypt this with password
+        public_key=pub_pem,
+        private_key=priv_pem,   # currently stored as plain PEM (ok for demo, not ideal for prod)
     )
-
     db.add(user)
     db.commit()
     db.refresh(user)

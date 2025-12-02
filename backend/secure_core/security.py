@@ -1,35 +1,46 @@
-# backend/secure_core/security.py
+# secure_core/security.py
 
-import os
 from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from typing import Optional
+
+from jose import jwt
 from passlib.context import CryptContext
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
+from secure_core.config import secure_settings  # you already have this file
 
-SECRET_KEY = "SUPER_SECRET_JWT_KEY_CHANGE_THIS"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# 👉 Use pbkdf2_sha256 instead of bcrypt to avoid Windows/bcrypt issues
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-# ---- PASSWORD HASHING ----
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-# ---- JWT CREATION ----
-def create_access_token(data: dict, expires_minutes=ACCESS_TOKEN_EXPIRE_MINUTES):
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode,
+        secure_settings.SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+    return encoded_jwt
 
 
 # ---- GENERATE RSA KEYS (patient private/public keys) ----
