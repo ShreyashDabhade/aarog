@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useUploadStore } from '../store/uploadStore';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
 import { nerService } from '../ner_service'; 
 import Tesseract from 'tesseract.js';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Activity, ShieldCheck, RefreshCw, Lock, FileImage, ArrowRight, Check } from 'lucide-react';
+import { Upload, Activity, ShieldCheck, RefreshCw, Lock, ArrowRight, Check, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- STEP 1: DROPZONE ---
@@ -159,36 +159,36 @@ const Anonymizer = () => {
 
 // --- STEP 4: DUAL ENCRYPTION (MATCHING YOUR BACKEND) ---
 const EncryptAndUpload = () => {
-  const { anonymizedText, file, setUploadStatus, setReportId, uploadStatus, reportId } = useUploadStore();
+  const { anonymizedText, file, setUploadStatus, setReportId, uploadStatus, reportId, reset } = useUploadStore();
   const { token, userPublicKeyPem } = useAuthStore();
   const navigate = useNavigate();
+  // Ref prevents double-firing in StrictMode
+  const processingRef = useRef(false);
 
   useEffect(() => {
+    if (processingRef.current || uploadStatus !== 'idle') return;
+    
     const process = async () => {
+      processingRef.current = true;
       setUploadStatus('encrypting');
       try {
-        // 1. Get Server Public Key
         const serverKeyResp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/server_pubkey.pem`);
         if (!serverKeyResp.ok) throw new Error("Backend server key unreachable");
         const { public_key: serverPem } = await serverKeyResp.json();
 
-        // 2. Encrypt for AI (Path A) - Anonymized Text
         const aesKeyRag = await cryptoService.generateAESKey();
         const ragData = await cryptoService.encryptData(aesKeyRag, anonymizedText);
         const ragKeyEnc = await cryptoService.wrapKeyWithRSA(serverPem, aesKeyRag);
 
-        // 3. Encrypt for Storage (Path B) - Original Binary File
         if (!userPublicKeyPem) throw new Error("Missing user public key");
         
         const aesKeyVault = await cryptoService.generateAESKey();
-        // Read file as buffer for encryption
         const fileBuffer = await file.arrayBuffer();
         const vaultData = await cryptoService.encryptData(aesKeyVault, fileBuffer);
         const vaultKeyEnc = await cryptoService.wrapKeyWithRSA(userPublicKeyPem, aesKeyVault);
 
         setUploadStatus('uploading');
         
-        // 4. Send to Backend (Matches DualUploadPayload in main.py)
         const payload = {
           filename: file.name,
           anon_cipher: ragData.cipher,
@@ -199,7 +199,9 @@ const EncryptAndUpload = () => {
           original_key_patient: vaultKeyEnc
         };
 
-        const resp = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/upload-record', {
+        // --- TYPO FIXED HERE ---
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const resp = await fetch(`${API_URL}/upload-record`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify(payload)
@@ -217,9 +219,11 @@ const EncryptAndUpload = () => {
       } catch (err) { 
           console.error(err); 
           setUploadStatus('error'); 
+          processingRef.current = false; 
       }
     };
-    if (uploadStatus === 'idle') process();
+
+    process();
   }, []);
 
   if (uploadStatus === 'success') return (
@@ -236,6 +240,12 @@ const EncryptAndUpload = () => {
       </div>
 
       <div className="flex gap-4 justify-center">
+        <button 
+          onClick={reset} 
+          className="px-8 py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-900 font-bold transition shadow-lg flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" /> Upload Another
+        </button>
         <button onClick={() => navigate('/')} className="px-8 py-3 border border-slate-300 rounded-xl hover:bg-slate-50 font-bold text-slate-600 transition">Return to Vault</button>
         <button onClick={() => navigate('/chat')} className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition">Chat with AI Agent</button>
       </div>
@@ -246,7 +256,7 @@ const EncryptAndUpload = () => {
       <div className="text-center py-20 text-red-600">
           <h3 className="text-2xl font-bold">Upload Failed</h3>
           <p>Check console for details. Ensure backend is running.</p>
-          <button onClick={() => setUploadStatus('idle')} className="mt-4 text-blue-600 underline">Try Again</button>
+          <button onClick={() => { setUploadStatus('idle'); processingRef.current = false; }} className="mt-4 text-blue-600 underline">Try Again</button>
       </div>
   );
 

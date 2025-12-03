@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
-import { FileText, Lock, Eye, Share2, Unlock, Clock, FileCheck } from 'lucide-react';
+import { FileText, Lock, Eye, AlertTriangle, FileCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const PatientDashboard = () => {
   const { token, userPrivateKey } = useAuthStore();
   const [reports, setReports] = useState([]);
-  const [decryptedContent, setDecryptedContent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +33,12 @@ const PatientDashboard = () => {
   }, [token]);
 
   const handleDecrypt = async (report) => {
+    // --- CRITICAL FIX: Check if key exists in memory ---
+    if (!userPrivateKey) {
+        alert("SESSION EXPIRED: Your secure key was cleared from memory on refresh.\n\nPlease Logout and Login again to restore your encryption keys.");
+        return;
+    }
+
     if (!report.enc_aes_key_patient) {
         alert("This record is missing keys.");
         return;
@@ -53,8 +58,10 @@ const PatientDashboard = () => {
 
       // 3. Determine Mime Type
       let mime = "application/octet-stream";
-      if (report.filename.endsWith(".png")) mime = "image/png";
-      if (report.filename.endsWith(".pdf")) mime = "application/pdf";
+      const ext = report.filename.split('.').pop().toLowerCase();
+      if (ext === "png") mime = "image/png";
+      if (ext === "pdf") mime = "application/pdf";
+      if (ext === "jpg" || ext === "jpeg") mime = "image/jpeg";
 
       // 4. Create Blob and Open
       const blob = new Blob([decryptedBuffer], { type: mime });
@@ -63,7 +70,7 @@ const PatientDashboard = () => {
 
     } catch (err) {
       console.error(err);
-      alert("Decryption Failed! Check your private key.");
+      alert("Decryption Failed! Ensure you are using the same account that uploaded this file.");
     }
   };
 
@@ -74,6 +81,14 @@ const PatientDashboard = () => {
           <h2 className="text-3xl font-bold text-slate-800">My Medical Vault</h2>
           <p className="text-slate-500 mt-1">Securely stored encrypted records.</p>
         </div>
+        
+        {/* Warning Badge if Key is Missing */}
+        {!userPrivateKey && (
+            <div className="hidden md:flex bg-amber-50 text-amber-700 px-4 py-2 rounded-lg border border-amber-200 text-sm font-semibold items-center gap-2 animate-pulse">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Read-Only Mode (Relogin required to Decrypt)</span>
+            </div>
+        )}
       </div>
       
       {isLoading ? (
@@ -111,12 +126,17 @@ const PatientDashboard = () => {
             </motion.div>
             ))}
             {reports.length === 0 && (
-            <div className="col-span-3 py-20 text-center bg-white rounded-3xl border border-dashed border-slate-300">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileCheck className="w-10 h-10 text-slate-300" />
+            <div className="col-span-full py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200 hover:border-blue-300 transition-colors group">
+                <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                <FileCheck className="w-10 h-10 text-blue-500" />
                 </div>
-                <p className="text-slate-500 font-medium">Your vault is empty.</p>
-                <p className="text-sm text-slate-400">Upload your first record to secure it.</p>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Your vault is currently empty</h3>
+                <p className="text-slate-500 max-w-md mx-auto mb-8">
+                Upload your first medical record to initialize your encrypted storage and enable AI analysis.
+                </p>
+                <a href="/upload" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-500/20">
+                Upload First Record
+                </a>
             </div>
             )}
         </div>
