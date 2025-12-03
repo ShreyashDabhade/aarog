@@ -1,8 +1,4 @@
 from langchain.tools import tool
-from typing import List
-import json
-
-# REAL IMPORT (No mocks)
 from .retrieval import search_reports
 
 @tool
@@ -15,24 +11,30 @@ def search_medical_reports(query: str) -> str:
     print(f" [Agent Tool] Searching for: {query}")
     
     try:
-        # Call the real ChromaDB search from retrieval.py
         results = search_reports(query, k=3)
         
-        # Safe extraction of data from Chroma's specific result format
-        # Chroma returns: {'documents': [['text1', 'text2']], 'ids': [['id1', 'id2']], ...}
         docs = results.get('documents')
         ids = results.get('ids')
+        metadatas = results.get('metadatas') # Get metadata for filenames
 
         if not docs or not docs[0]:
-            return "Observation: No relevant medical records found in the database. The user may not have uploaded/indexed the document yet."
+            return "Observation: No relevant medical records found. The user may not have uploaded documents yet."
         
-        # Flatten the list of lists
         flat_docs = docs[0]
-        flat_ids = ids[0]
+        flat_metas = metadatas[0] if metadatas else [{}] * len(flat_docs)
         
         formatted_context = ""
-        for i, (doc, doc_id) in enumerate(zip(flat_docs, flat_ids)):
-            formatted_context += f"SOURCE {doc_id}: {doc}\n\n"
+        for i, (doc, meta) in enumerate(zip(flat_docs, flat_metas)):
+            # Generate Frontend-Compatible Markdown Link
+            # Syntax: [Filename](report_id)
+            # We use a custom protocol or just path query param: /dashboard?view=REPORT_ID
+            
+            r_id = meta.get('report_id', 'unknown')
+            f_name = meta.get('filename', 'Unknown File')
+            
+            formatted_context += f"SOURCE: {f_name} (ID: {r_id})\n"
+            formatted_context += f"LINK: [View {f_name}](/dashboard?view={r_id})\n"
+            formatted_context += f"CONTENT: {doc}\n\n"
             
         return formatted_context
 

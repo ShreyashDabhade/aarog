@@ -1,7 +1,5 @@
 import os
-import uuid
 import chromadb
-from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -15,6 +13,7 @@ _embedding_model = None
 def get_chroma_client():
     global _chroma_client
     if _chroma_client is None:
+        os.makedirs(CHROMA_DB_DIR, exist_ok=True)
         _chroma_client = chromadb.PersistentClient(path=CHROMA_DB_DIR)
     return _chroma_client
 
@@ -31,9 +30,10 @@ def get_collection():
 
 # --- CORE LOGIC ---
 
-def index_text_in_chroma(report_id: str, text: str):
+def index_text_in_chroma(report_id: str, filename: str, text: str):
     """
-    Splits text into chunks, embeds them, and stores in Chroma.
+    Splits text into chunks, embeds them using SentenceTransformer, 
+    and stores in Chroma with filename metadata.
     """
     model = get_embedding_model()
     collection = get_collection()
@@ -44,10 +44,13 @@ def index_text_in_chroma(report_id: str, text: str):
     if not chunks:
         return
 
+    # 1. Generate Embeddings Manually (Your original reliable method)
     embeddings = model.encode(chunks).tolist()
 
     ids = [f"{report_id}_{i}" for i in range(len(chunks))]
-    metadatas = [{"report_id": report_id, "chunk_index": i} for i in range(len(chunks))]
+    
+    # 2. Store Filename in Metadata (The new fix)
+    metadatas = [{"report_id": report_id, "filename": filename, "chunk_index": i} for i in range(len(chunks))]
 
     collection.add(
         documents=chunks,
@@ -55,12 +58,11 @@ def index_text_in_chroma(report_id: str, text: str):
         metadatas=metadatas,
         ids=ids
     )
-    print(f" [Chroma] Indexed {len(chunks)} chunks for {report_id}")
+    print(f" [Chroma] Indexed {len(chunks)} chunks for {filename} ({report_id})")
 
 def search_reports(query_text: str, k: int = 3, filter_metadata: dict = None):
     """
     Semantic search with optional Metadata Filtering.
-    filter_metadata example: {"report_id": {"$in": ["id1", "id2"]}}
     """
     model = get_embedding_model()
     collection = get_collection()
@@ -70,7 +72,7 @@ def search_reports(query_text: str, k: int = 3, filter_metadata: dict = None):
     results = collection.query(
         query_embeddings=query_embedding,
         n_results=k,
-        where=filter_metadata # <--- KEY CHANGE: Pass the filter to Chroma
+        where=filter_metadata
     )
     
     return results

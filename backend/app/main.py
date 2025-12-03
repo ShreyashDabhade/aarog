@@ -84,8 +84,10 @@ async def upload_medical_record(
     db.add(new_report)
     db.commit()
     
+    # UPDATED: Pass filename to task
     task = process_document_task.delay(
         report_id=report_id,
+        filename=payload.filename,
         enc_aes_key_hex=payload.anon_key_server,
         iv_hex=payload.anon_iv,
         ciphertext_hex=payload.anon_cipher

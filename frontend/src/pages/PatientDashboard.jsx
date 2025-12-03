@@ -1,15 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Lock, AlertTriangle, Share2 } from 'lucide-react';
+import { cryptoService } from '../lib/crypto';
+import { FileText, Lock, AlertTriangle, Share2, Eye, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const PatientDashboard = () => {
   const { token, userPrivateKey } = useAuthStore();
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewingId, setViewingId] = useState(null); // Loading state for decryption
+  
   const pollingRef = useRef(null);
-  const navigate = useNavigate(); // Hook for navigation
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const autoViewId = searchParams.get('view');
 
   // --- Auto-Refresh Logic ---
   const fetchReports = async (isBackground = false) => {
@@ -36,9 +41,53 @@ const PatientDashboard = () => {
     }
   }, [token]);
 
-  // --- NEW HANDLER: Redirect to Consent Page ---
+  // --- Decrypt & View Logic ---
+  const handleViewFile = async (report) => {
+    if (!userPrivateKey) return alert("Session Key Missing. Please Relogin.");
+    setViewingId(report.id);
+    
+    try {
+        // 1. Unwrap AES Key (Patient uses 'enc_aes_key_patient')
+        const aesKey = await cryptoService.unwrapKeyWithRSA(userPrivateKey, report.enc_aes_key_patient);
+        
+        // 2. Decrypt File
+        const decryptedBuffer = await cryptoService.decryptData(
+            aesKey,
+            report.original_ciphertext,
+            report.original_iv,
+            false // binary
+        );
+
+        // 3. Open
+        let mime = "application/octet-stream";
+        if (report.filename.endsWith(".pdf")) mime = "application/pdf";
+        else if (report.filename.match(/\.(jpg|jpeg|png)$/i)) mime = "image/png";
+        
+        const blob = new Blob([decryptedBuffer], { type: mime });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        
+    } catch (err) {
+        console.error(err);
+        alert("Decryption Failed. Key mismatch or data corruption.");
+    } finally {
+        setViewingId(null);
+    }
+  };
+
+  // --- Auto-View Effect (From AI Chat Link) ---
+  useEffect(() => {
+    if (autoViewId && reports.length > 0) {
+        const reportToView = reports.find(r => r.id === autoViewId);
+        if (reportToView) {
+            // Small delay to ensure UI is ready
+            setTimeout(() => handleViewFile(reportToView), 500);
+        }
+    }
+  }, [autoViewId, reports]);
+
+  // --- Redirect to Consent Page ---
   const handleShareClick = (report) => {
-    // Pass the report ID via URL params so the dropdown auto-selects it
     navigate(`/consent?reportId=${report.id}`);
   };
 
@@ -72,7 +121,6 @@ const PatientDashboard = () => {
                         <FileText className="w-6 h-6" />
                     </div>
                     <div className="flex gap-2">
-                        {/* UPDATED BUTTON: Navigates to Consent Page */}
                         <button 
                             onClick={() => handleShareClick(report)} 
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" 
@@ -84,8 +132,17 @@ const PatientDashboard = () => {
                 </div>
                 <h3 className="font-bold text-lg text-slate-800 truncate mb-1">{report.filename}</h3>
                 <p className="text-xs text-slate-400 font-mono mb-6 bg-slate-50 p-1.5 rounded w-fit">{report.id.substring(0,8)}...</p>
-                <button className="w-full py-3 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-2">
-                    <Lock className="w-4 h-4" /> Encrypted
+                
+                <button 
+                    onClick={() => handleViewFile(report)}
+                    disabled={viewingId === report.id}
+                    className="w-full py-3 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100 transition"
+                >
+                    {viewingId === report.id ? (
+                        <><RefreshCw className="w-4 h-4 animate-spin"/> Decrypting...</>
+                    ) : (
+                        <><Eye className="w-4 h-4" /> Decrypt & View</>
+                    )}
                 </button>
             </motion.div>
             ))}

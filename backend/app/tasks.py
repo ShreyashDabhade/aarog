@@ -70,8 +70,8 @@ def decrypt_document(ciphertext_hex: str, iv_hex: str, aes_key: bytes) -> str:
         raise e
 
 @celery_app.task(name="process_document_task")
-def process_document_task(report_id: str, enc_aes_key_hex: str, iv_hex: str, ciphertext_hex: str):
-    print(f" [Worker] Processing Report: {report_id}")
+def process_document_task(report_id: str, filename: str, enc_aes_key_hex: str, iv_hex: str, ciphertext_hex: str):
+    print(f" [Worker] Processing Report: {report_id} ({filename})")
     
     # 1. Load Keys
     try:
@@ -94,11 +94,8 @@ def process_document_task(report_id: str, enc_aes_key_hex: str, iv_hex: str, cip
         print(f" [Error] Document Decryption failed: {e}")
         return "FAILED_DOC_DECRYPT"
 
-    # 4. Indexing (RAG Layer)
-    # --- FIX: Call the correct function name ---
-    index_text_in_chroma(report_id, plaintext_report)
+    # 4. Indexing (Pass filename now)
+    index_text_in_chroma(report_id, filename, plaintext_report)
     
-    print(f" [Worker] Successfully decrypted report {report_id}. Text length: {len(plaintext_report)}")
-    print(f" [Worker] Indexing to ChromaDB...")
-    
+    print(f" [Worker] Successfully decrypted & indexed {filename}.")
     return "SUCCESS"
