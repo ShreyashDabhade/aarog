@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
 // 1. Replace with your deployed Contract Address
-export const CONTRACT_ADDRESS = "0xdDD6226d36a2B2A575620F766043A627686858BD";
+export const CONTRACT_ADDRESS = "0xEE12fe999124D2ea6D5e34e76bA666eBFB1B754B";
 
 // 2. Replace with your Contract ABI (Copy from Remix)
 export const CONTRACT_ABI = [

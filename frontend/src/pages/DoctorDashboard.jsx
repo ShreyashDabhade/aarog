@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
-import { Users, Activity, FileText, Search, Clock, Link as LinkIcon, RefreshCw, ChevronRight, File, Lock, Eye, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { getContract } from '../lib/blockchain'; // <--- NEW IMPORT
+import { ethers } from 'ethers'; // <--- NEW IMPORT
+import { Users, Activity, FileText, Search, Clock, Link as LinkIcon, RefreshCw, ChevronRight, Lock, Eye, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const StatCard = ({ icon: Icon, label, value, color }) => (
   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
@@ -23,7 +25,7 @@ const DoctorDashboard = () => {
   
   // Data State
   const [sharedReports, setSharedReports] = useState([]);
-  const [patients, setPatients] = useState({}); // Grouped by email
+  const [patients, setPatients] = useState({}); 
   const [selectedPatient, setSelectedPatient] = useState(null);
   
   // Session Code State
@@ -31,6 +33,9 @@ const DoctorDashboard = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [loadingCode, setLoadingCode] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Verification State
+  const [verifying, setVerifying] = useState(null); // stores the report_id currently being verified
 
   // --- 1. Fetch & Organize Data ---
   useEffect(() => {
@@ -47,7 +52,6 @@ const DoctorDashboard = () => {
         const data = await resp.json();
         setSharedReports(data);
 
-        // Group by Patient Email
         const grouped = data.reduce((acc, report) => {
           const email = report.patient_email;
           if (!acc[email]) acc[email] = [];
@@ -82,7 +86,7 @@ const DoctorDashboard = () => {
       });
       const data = await resp.json();
       setSessionCode(data.code);
-      setTimeLeft(300); // 5 minutes
+      setTimeLeft(300); 
     } catch (err) {
       console.error(err);
       alert("Failed to generate code");
@@ -97,15 +101,44 @@ const DoctorDashboard = () => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // --- 3. Decryption Logic ---
-  const handleViewFile = async (report) => {
+  // --- 3. Blockchain Verification & Decryption Logic ---
+  const verifyAndDecrypt = async (report) => {
     if (!userPrivateKey) return alert("Session Key Missing. Please Relogin.");
-    
+    setVerifying(report.report_id);
+
     try {
-        // 1. Unwrap AES Key using Doctor's Private Key
+        console.log(`🔍 Verifying Integrity for ${report.report_id}...`);
+        
+        // A. Fetch "True Hash" from Blockchain
+        // ---------------------------------------------------------
+        const contract = await getContract();
+        const record = await contract.records(report.report_id);
+        const onChainHash = record.fileHash;
+        
+        console.log("Blockchain Hash:", onChainHash);
+
+        if (!onChainHash || onChainHash === "") {
+            alert("⚠️ Warning: This file is not registered on the blockchain. It may be an old file.");
+            // We allow viewing, but warn the user.
+        } else {
+            // B. Calculate Local Hash of the Encrypted Data
+            // We hash the *Ciphertext* to match UploadWizard logic
+            const localHash = ethers.keccak256("0x" + report.original_ciphertext);
+            console.log("Local Hash:", localHash);
+
+            // C. COMPARE
+            if (localHash !== onChainHash) {
+                setVerifying(null);
+                alert("❌ CRITICAL SECURITY WARNING: File integrity check failed! The file on the server has been tampered with.");
+                return; // STOP DECRYPTION
+            }
+            console.log("✅ Integrity Verified!");
+        }
+
+        // D. Unwrap Key & Decrypt (Existing Logic)
+        // ---------------------------------------------------------
         const aesKey = await cryptoService.unwrapKeyWithRSA(userPrivateKey, report.enc_aes_key);
         
-        // 2. Decrypt File
         const decryptedBuffer = await cryptoService.decryptData(
             aesKey,
             report.original_ciphertext,
@@ -113,7 +146,6 @@ const DoctorDashboard = () => {
             false // binary
         );
 
-        // 3. Open
         let mime = "application/octet-stream";
         if (report.filename.endsWith(".pdf")) mime = "application/pdf";
         else if (report.filename.match(/\.(jpg|jpeg|png)$/i)) mime = "image/png";
@@ -124,11 +156,12 @@ const DoctorDashboard = () => {
         
     } catch (err) {
         console.error(err);
-        alert("Access Denied or Revoked. The patient may have stopped sharing this file.");
+        alert("Verification or Decryption Failed: " + (err.reason || err.message));
+    } finally {
+        setVerifying(null);
     }
   };
 
-  // Stats Calculation
   const totalPatients = Object.keys(patients).length;
   const totalReports = sharedReports.length;
 
@@ -244,10 +277,8 @@ const DoctorDashboard = () => {
                         </div>
                         
                         <div className="flex gap-3">
-                            {/* NEW: Patient-Specific AI Chat Button */}
                             <button 
                                 onClick={() => {
-                                    // Find the patient ID from the first report (all reports in this view belong to this patient)
                                     const pid = patients[selectedPatient][0].patient_id;
                                     navigate(`/chat?patientId=${pid}`);
                                 }}
@@ -269,16 +300,31 @@ const DoctorDashboard = () => {
                                     <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <Lock className="w-4 h-4 text-slate-300" />
+                                    
+                                    {/* STATUS BADGE */}
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-[10px] uppercase font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 flex items-center gap-1">
+                                            <ShieldCheck className="w-3 h-3"/> Blockchain
+                                        </span>
+                                    </div>
                                 </div>
                                 <h4 className="font-bold text-slate-800 mb-1 truncate" title={report.filename}>{report.filename}</h4>
                                 <p className="text-xs text-slate-400 font-mono mb-4">{report.report_id.substring(0,8)}...</p>
                                 
                                 <button 
-                                    onClick={() => handleViewFile(report)}
-                                    className="w-full py-2.5 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                                    onClick={() => verifyAndDecrypt(report)}
+                                    disabled={verifying === report.report_id}
+                                    className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                                        verifying === report.report_id 
+                                        ? 'bg-emerald-100 text-emerald-700 cursor-wait'
+                                        : 'bg-slate-900 text-white hover:bg-blue-600'
+                                    }`}
                                 >
-                                    <Eye className="w-4 h-4" /> Decrypt & View
+                                    {verifying === report.report_id ? (
+                                        <><RefreshCw className="w-4 h-4 animate-spin"/> Verifying...</>
+                                    ) : (
+                                        <><Eye className="w-4 h-4" /> Verify & View</>
+                                    )}
                                 </button>
                             </div>
                         ))}
