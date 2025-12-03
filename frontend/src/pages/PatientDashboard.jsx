@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
-import { FileText, Lock, Eye, AlertTriangle, FileCheck, Share2, X, Trash2, UserCheck } from 'lucide-react';
+import { getContract } from '../lib/blockchain'; // --- IMPORT ADDED ---
+import { FileText, Lock, Eye, AlertTriangle, FileCheck, Share2, X, Trash2, UserCheck, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PatientDashboard = () => {
@@ -16,6 +17,9 @@ const PatientDashboard = () => {
   const [doctorInfo, setDoctorInfo] = useState(null); // { id, name, public_key }
   const [sharingStatus, setSharingStatus] = useState("idle"); // idle, resolving, ready, sharing, success, error
   const [accessList, setAccessList] = useState([]);
+  
+  // --- NEW STATE FOR BLOCKCHAIN ---
+  const [doctorEthAddress, setDoctorEthAddress] = useState(""); 
 
   useEffect(() => {
     fetchReports();
@@ -37,6 +41,7 @@ const PatientDashboard = () => {
     setShareModalOpen(true);
     setSessionCode("");
     setDoctorInfo(null);
+    setDoctorEthAddress(""); // Reset address
     setSharingStatus("idle");
     
     // Fetch current access list
@@ -65,6 +70,12 @@ const PatientDashboard = () => {
 
   const handleShareConfirm = async () => {
     if (!userPrivateKey) return alert("Key missing. Please relogin.");
+    
+    // --- BLOCKCHAIN VALIDATION ---
+    if (!doctorEthAddress) {
+        return alert("Please enter the Doctor's Wallet Address for the Blockchain Registry.");
+    }
+
     setSharingStatus("sharing");
 
     try {
@@ -74,7 +85,7 @@ const PatientDashboard = () => {
         // 2. Wrap AES Key (using Doctor PubKey)
         const doctorEncryptedKey = await cryptoService.wrapKeyWithRSA(doctorInfo.public_key, aesKey);
 
-        // 3. Send to Backend
+        // 3. Send to Backend (Standard Database Share)
         const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/share-record`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -87,6 +98,22 @@ const PatientDashboard = () => {
 
         if (!resp.ok) throw new Error("Share failed");
         
+        // --- 4. BLOCKCHAIN INTEGRATION START ---
+        try {
+            console.log("🔗 Starting Blockchain Access Grant...");
+            const contract = await getContract();
+            // Call the Smart Contract to record permission
+            const tx = await contract.grantAccess(selectedReport.id, doctorEthAddress);
+            console.log("Tx Sent:", tx.hash);
+            await tx.wait(); // Wait for confirmation
+            console.log("✅ Access Granted on Blockchain");
+        } catch (chainErr) {
+            console.error("Blockchain Error:", chainErr);
+            alert(`Shared locally, but Blockchain transaction failed: ${chainErr.message || chainErr}`);
+            // We don't return here, we let the UI show success because the DB share worked.
+        }
+        // --- BLOCKCHAIN INTEGRATION END ---
+
         setSharingStatus("success");
         setTimeout(() => setShareModalOpen(false), 1500);
     } catch (err) {
@@ -188,7 +215,22 @@ const PatientDashboard = () => {
                                             <p className="text-xs text-slate-500">Public Key Verified</p>
                                         </div>
                                     </div>
-                                    <button onClick={handleShareConfirm} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
+
+                                    {/* --- BLOCKCHAIN INPUT --- */}
+                                    <div className="mb-4 bg-white p-3 rounded-lg border border-blue-100">
+                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                                            <Activity className="w-3 h-3"/> Blockchain Audit
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Doctor's ETH Address (0x...)" 
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-sm font-mono focus:border-blue-400 outline-none"
+                                            value={doctorEthAddress}
+                                            onChange={(e) => setDoctorEthAddress(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <button onClick={handleShareConfirm} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-500/20">
                                         Confirm & Grant Access
                                     </button>
                                 </div>

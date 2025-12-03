@@ -7,6 +7,8 @@ import Tesseract from 'tesseract.js';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Activity, ShieldCheck, RefreshCw, Lock, ArrowRight, Check, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ethers } from 'ethers';
+import { getContract } from '../lib/blockchain';
 
 // --- STEP 1: DROPZONE ---
 const DropZone = () => {
@@ -186,6 +188,7 @@ const EncryptAndUpload = () => {
         const fileBuffer = await file.arrayBuffer();
         const vaultData = await cryptoService.encryptData(aesKeyVault, fileBuffer);
         const vaultKeyEnc = await cryptoService.wrapKeyWithRSA(userPublicKeyPem, aesKeyVault);
+        const fileHash = ethers.keccak256("0x" + vaultData.cipher);
 
         setUploadStatus('uploading');
         
@@ -213,6 +216,22 @@ const EncryptAndUpload = () => {
         }
 
         const data = await resp.json();
+
+        try {
+            console.log("🔗 Starting Blockchain Transaction...");
+            const contract = await getContract();
+            // Call the Smart Contract
+            const tx = await contract.registerFile(data.report_id, fileHash);
+            console.log("Tx Sent:", tx.hash);
+            await tx.wait(); // Wait for block confirmation
+            console.log("✅ File Registered on Blockchain");
+        } catch (chainErr) {
+            console.error("Blockchain Error:", chainErr);
+            // Optional: Don't fail the whole upload if blockchain fails, 
+            // just alert the user.
+            alert("File uploaded to server, but Blockchain registration failed: " + chainErr.message);
+        }
+
         setReportId(data.report_id);
         setUploadStatus('success');
 
