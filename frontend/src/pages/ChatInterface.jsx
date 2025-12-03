@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { useSearchParams, Link } from 'react-router-dom'; // Import Link
-import { Send, Bot, User, Sparkles, AlertCircle } from 'lucide-react';
+import { useChatStore } from '../store/chatStore'; // Ensure this file exists (Step 1)
+import { useSearchParams, Link } from 'react-router-dom'; 
+import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 // Helper to render text with Markdown-style links
@@ -17,12 +18,20 @@ const MessageContent = ({ text }) => {
     if (match.index > lastIndex) {
       parts.push(text.substring(lastIndex, match.index));
     }
+    
+    let url = match[2].trim();
+    // Handle root redirects properly
+    if (url.startsWith('/dashboard')) {
+       // Convert /dashboard?view=X to /?view=X
+       url = url.replace('/dashboard', '/'); 
+    }
+
     // Add Link component
     parts.push(
       <Link 
         key={match.index} 
-        to={match[2] === '/dashboard' ? '/' : match[2]} // Handle root redirect
-        className="text-blue-400 hover:underline font-bold"
+        to={url} 
+        className="text-blue-600 hover:text-blue-800 font-bold underline decoration-blue-300 decoration-2 underline-offset-2 transition-colors"
       >
         {match[1]}
       </Link>
@@ -38,50 +47,64 @@ const MessageContent = ({ text }) => {
 };
 
 const ChatInterface = () => {
-  // ... [Keep existing state and handlers exactly as is] ...
   const [query, setQuery] = useState("");
-  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const { token, role } = useAuthStore();
+  
+  // Use Global Store for History
+  const { history, addToHistory, setHistory } = useChatStore(); 
+  
   const endRef = useRef(null);
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get("patientId");
 
+  // Set initial welcome message ONLY if history is empty
   useEffect(() => {
-    let welcome = "Hello. I am your secure medical assistant.";
-    if (role === 'patient') {
-        welcome = "I have access to YOUR encrypted records only. Ask me about your health.";
-    } else if (role === 'doctor') {
-        welcome = patientId 
-            ? `I am analyzing records for Patient ID #${patientId}.` 
-            : "I am in Global Research Mode.";
+    if (history.length === 0) {
+        let welcome = "Hello. I am your secure medical assistant.";
+        if (role === 'patient') {
+            welcome = "I have access to YOUR encrypted records only. Ask me about your health.";
+        } else if (role === 'doctor') {
+            welcome = patientId 
+                ? `I am analyzing records for Patient ID #${patientId}.` 
+                : "I am in Global Research Mode. Ask me about patient patterns.";
+        }
+        setHistory([{ role: 'bot', text: welcome }]);
     }
-    setHistory([{ role: 'bot', text: welcome }]);
-  }, [role, patientId]);
+  }, [role, patientId, history.length, setHistory]);
 
   const scrollToBottom = () => endRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(scrollToBottom, [history]);
 
   const handleSend = async () => {
     if (!query.trim()) return;
-    const userMsg = { role: 'user', text: query };
-    setHistory(prev => [...prev, userMsg]);
+    
+    // Add User Message to Global Store
+    addToHistory({ role: 'user', text: query });
+    
     setQuery("");
     setLoading(true);
 
     try {
-      let url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/query?q=${encodeURIComponent(query)}`;
-      if (role === 'doctor' && patientId) url += `&patient_id=${patientId}`;
-
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      let url = `${API_URL}/query?q=${encodeURIComponent(query)}`;
+      if (role === 'doctor' && patientId) {
+          url += `&patient_id=${patientId}`;
+      }
+      
       const resp = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!resp.ok) throw new Error("Failed");
       const data = await resp.json();
-      setHistory(prev => [...prev, { role: 'bot', text: data.answer }]);
+      
+      // Add Bot Message to Global Store
+      addToHistory({ role: 'bot', text: data.answer });
+      
     } catch (err) {
-      setHistory(prev => [...prev, { role: 'bot', text: "Error connecting to AI." }]);
+      console.error(err);
+      addToHistory({ role: 'bot', text: "Error connecting to AI." });
     } finally {
       setLoading(false);
     }
@@ -89,7 +112,7 @@ const ChatInterface = () => {
 
   return (
     <div className="bg-white rounded-3xl shadow-xl border border-slate-200 h-[calc(100vh-140px)] flex flex-col overflow-hidden">
-      {/* ... [Header - Keep exactly as is] ... */}
+      {/* Header */}
       <div className="px-8 py-5 border-b border-slate-100 bg-white flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-blue-500/20">
@@ -97,7 +120,7 @@ const ChatInterface = () => {
           </div>
           <div>
             <h3 className="font-bold text-slate-800 text-sm">SecureMed AI</h3>
-            <p className="text-xs text-slate-500">RAG Powered</p>
+            <p className="text-xs text-slate-500">Persistent Context</p>
           </div>
         </div>
       </div>
@@ -117,7 +140,6 @@ const ChatInterface = () => {
               max-w-[75%] p-5 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap
               ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'}
             `}>
-              {/* USE CUSTOM RENDERER */}
               <MessageContent text={msg.text} />
             </div>
           </motion.div>
@@ -126,7 +148,7 @@ const ChatInterface = () => {
         <div ref={endRef} />
       </div>
 
-      {/* ... [Input Area - Keep exactly as is] ... */}
+      {/* Input */}
       <div className="p-6 bg-white border-t border-slate-100">
         <div className="relative flex items-center gap-3 max-w-4xl mx-auto bg-slate-50 p-2 rounded-2xl border border-slate-200 focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
           <input 

@@ -15,35 +15,32 @@ def search_medical_reports(query: str) -> str:
         
         docs = results.get('documents')
         ids = results.get('ids')
-        metadatas = results.get('metadatas') # Get metadata for filenames
+        metadatas = results.get('metadatas') 
 
         if not docs or not docs[0]:
-            return "Observation: No relevant medical records found. The user may not have uploaded documents yet."
+            return "Observation: No relevant medical records found."
         
         flat_docs = docs[0]
         flat_metas = metadatas[0] if metadatas else [{}] * len(flat_docs)
         
         formatted_context = ""
         for i, (doc, meta) in enumerate(zip(flat_docs, flat_metas)):
-            # Generate Frontend-Compatible Markdown Link
-            # Syntax: [Filename](report_id)
-            # We use a custom protocol or just path query param: /dashboard?view=REPORT_ID
-            
             r_id = meta.get('report_id', 'unknown')
             f_name = meta.get('filename', 'Unknown File')
             
-            formatted_context += f"SOURCE: {f_name} (ID: {r_id})\n"
-            formatted_context += f"LINK: [View {f_name}](/dashboard?view={r_id})\n"
-            formatted_context += f"CONTENT: {doc}\n\n"
+            # --- FIX: Changed '/dashboard' to '/' ---
+            # This ensures the query param survives the router
+            formatted_context += f"Source: [{f_name}](/?view={r_id})\n"
+            formatted_context += f"Content: {doc}\n\n"
             
         return formatted_context
 
     except Exception as e:
         print(f" [Tool Error] Retrieval failed: {e}")
-        return f"Observation: Database error occurred - {str(e)}"
+        return f"Observation: Database error - {str(e)}"
 
 @tool
 def get_current_date(query: str = "") -> str:
-    """Returns today's date. Useful for calculating ages or timelines."""
+    """Returns today's date."""
     from datetime import date
     return str(date.today())

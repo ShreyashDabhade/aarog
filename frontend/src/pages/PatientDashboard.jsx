@@ -3,62 +3,70 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
 import { FileText, Lock, AlertTriangle, Share2, Eye, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const PatientDashboard = () => {
   const { token, userPrivateKey } = useAuthStore();
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewingId, setViewingId] = useState(null); // Loading state for decryption
+  const [viewingId, setViewingId] = useState(null); 
   
   const pollingRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const autoViewId = searchParams.get('view');
+  
+  // Get the view ID from URL
+  const rawAutoViewId = searchParams.get('view');
+  // SANITIZE: Remove chunk suffix (e.g., "abc-123_0" -> "abc-123")
+  const autoViewId = rawAutoViewId ? rawAutoViewId.split('_')[0] : null;
 
   // --- Auto-Refresh Logic ---
   const fetchReports = async (isBackground = false) => {
+    if (!token) return;
     if (!isBackground) setIsLoading(true);
+
     try {
-      const resp = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/my-records', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const resp = await fetch(`${API_URL}/my-records`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (resp.ok) setReports(await resp.json());
-    } catch (err) { console.error(err); } 
-    finally { 
+
+      if (resp.ok) {
+        const data = await resp.json();
+        setReports(data);
+      }
+    } catch (err) { 
+      console.error("Fetch error:", err); 
+    } finally { 
       if (!isBackground) setIsLoading(false); 
     }
   };
 
   useEffect(() => {
     fetchReports();
-    pollingRef.current = setInterval(() => {
-        fetchReports(true);
-    }, 5000); 
-
-    return () => {
-        if(pollingRef.current) clearInterval(pollingRef.current);
-    }
+    pollingRef.current = setInterval(() => fetchReports(true), 5000); 
+    return () => clearInterval(pollingRef.current);
   }, [token]);
 
   // --- Decrypt & View Logic ---
   const handleViewFile = async (report) => {
-    if (!userPrivateKey) return alert("Session Key Missing. Please Relogin.");
+    if (!userPrivateKey) {
+        alert("Security Key Missing. You must re-login to view files.");
+        return;
+    }
+    
+    console.log("Opening:", report.filename);
     setViewingId(report.id);
     
     try {
-        // 1. Unwrap AES Key (Patient uses 'enc_aes_key_patient')
         const aesKey = await cryptoService.unwrapKeyWithRSA(userPrivateKey, report.enc_aes_key_patient);
-        
-        // 2. Decrypt File
         const decryptedBuffer = await cryptoService.decryptData(
             aesKey,
             report.original_ciphertext,
             report.original_iv,
-            false // binary
+            false 
         );
 
-        // 3. Open
         let mime = "application/octet-stream";
         if (report.filename.endsWith(".pdf")) mime = "application/pdf";
         else if (report.filename.match(/\.(jpg|jpeg|png)$/i)) mime = "image/png";
@@ -75,18 +83,23 @@ const PatientDashboard = () => {
     }
   };
 
-  // --- Auto-View Effect (From AI Chat Link) ---
+  // --- Auto-View Effect ---
   useEffect(() => {
     if (autoViewId && reports.length > 0) {
         const reportToView = reports.find(r => r.id === autoViewId);
+        
         if (reportToView) {
-            // Small delay to ensure UI is ready
-            setTimeout(() => handleViewFile(reportToView), 500);
+            // Avoid re-triggering if we are already viewing this file
+            if (viewingId !== reportToView.id) {
+                console.log("Auto-opening report:", reportToView.id);
+                handleViewFile(reportToView);
+            }
+        } else {
+            console.warn(`Report ${autoViewId} not found in vault (Count: ${reports.length})`);
         }
     }
-  }, [autoViewId, reports]);
+  }, [autoViewId, reports]); // Depend on the SANITIZED id
 
-  // --- Redirect to Consent Page ---
   const handleShareClick = (report) => {
     navigate(`/consent?reportId=${report.id}`);
   };
@@ -109,7 +122,13 @@ const PatientDashboard = () => {
       </div>
       
       {isLoading ? (
-          <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
+          <div className="flex justify-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+      ) : reports.length === 0 ? (
+          <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+            <p>No records found. Upload a document to get started.</p>
+          </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {reports.map((report, i) => (

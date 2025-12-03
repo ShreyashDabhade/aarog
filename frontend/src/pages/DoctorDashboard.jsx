@@ -39,12 +39,14 @@ const DoctorDashboard = () => {
 
   // URL Params for Auto-View
   const [searchParams] = useSearchParams();
-  const autoViewId = searchParams.get('view');
+  const rawAutoViewId = searchParams.get('view');
+  // SANITIZE: Remove chunk suffix
+  const autoViewId = rawAutoViewId ? rawAutoViewId.split('_')[0] : null;
 
   // Polling Reference
   const pollingRef = useRef(null);
 
-  // --- 1. Fetch & Organize Data (Auto-Refreshing) ---
+  // --- 1. Fetch & Organize Data ---
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoadingData(true);
     try {
@@ -75,11 +77,7 @@ const DoctorDashboard = () => {
 
   useEffect(() => {
     fetchData();
-    // Poll every 5 seconds
-    pollingRef.current = setInterval(() => {
-      fetchData(true); 
-    }, 5000);
-
+    pollingRef.current = setInterval(() => fetchData(true), 5000);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
@@ -125,45 +123,37 @@ const DoctorDashboard = () => {
     try {
         console.log(`🔍 Verifying Integrity for ${report.report_id}...`);
         
-        // A. Fetch "True Hash" from Blockchain
         try {
             const contract = await getContract();
             const record = await contract.records(report.report_id);
             const onChainHash = record.fileHash;
             
-            console.log("Blockchain Hash:", onChainHash);
-
             if (!onChainHash || onChainHash === "") {
-                alert("⚠️ Warning: This file is not registered on the blockchain. It may be an old file or sync is pending.");
+                alert("⚠️ Warning: This file is not registered on the blockchain.");
             } else {
-                // B. Calculate Local Hash of the Encrypted Data
                 const localHash = ethers.keccak256("0x" + report.original_ciphertext);
-                console.log("Local Hash:", localHash);
-
-                // C. COMPARE
                 if (localHash !== onChainHash) {
                     setVerifying(null);
-                    alert("❌ CRITICAL SECURITY WARNING: File integrity check failed! The file on the server has been tampered with.");
-                    return; // STOP DECRYPTION
+                    alert("❌ CRITICAL: File integrity check failed! Tampering detected.");
+                    return; 
                 }
                 console.log("✅ Integrity Verified!");
             }
         } catch (chainErr) {
             console.error("Blockchain Connection Error:", chainErr);
-            if(!confirm("Could not verify Blockchain Integrity (Wallet/Network Error). View anyway?")) {
+            if(!confirm("Could not verify Blockchain Integrity. View anyway?")) {
                 setVerifying(null);
                 return;
             }
         }
 
-        // D. Decrypt
+        // Decrypt
         const aesKey = await cryptoService.unwrapKeyWithRSA(userPrivateKey, report.enc_aes_key);
-        
         const decryptedBuffer = await cryptoService.decryptData(
             aesKey,
             report.original_ciphertext,
             report.original_iv,
-            false // binary
+            false 
         );
 
         let mime = "application/octet-stream";
@@ -182,13 +172,15 @@ const DoctorDashboard = () => {
     }
   };
 
-  // --- 4. Auto-View Effect (Triggered by AI Chat Link) ---
+  // --- 4. Auto-View Effect ---
   useEffect(() => {
     if (autoViewId && sharedReports.length > 0) {
         const reportToView = sharedReports.find(r => r.report_id === autoViewId);
         if (reportToView) {
-            // Slight delay to ensure UI renders first
-            setTimeout(() => handleViewFile(reportToView), 500);
+             // Prevent re-trigger if already verifying
+             if (verifying !== reportToView.report_id) {
+                setTimeout(() => handleViewFile(reportToView), 500);
+             }
         }
     }
   }, [autoViewId, sharedReports]);
