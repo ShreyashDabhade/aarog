@@ -242,8 +242,23 @@ const DoctorDashboard = () => {
                             <h3 className="text-2xl font-bold text-slate-800">Medical Records</h3>
                             <p className="text-slate-500 text-sm">Shared by <span className="font-semibold text-blue-600">{selectedPatient}</span></p>
                         </div>
-                        <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full uppercase tracking-wide">
-                            Active Access
+                        
+                        <div className="flex gap-3">
+                            {/* NEW: Patient-Specific AI Chat Button */}
+                            <button 
+                                onClick={() => {
+                                    // Find the patient ID from the first report (all reports in this view belong to this patient)
+                                    const pid = patients[selectedPatient][0].patient_id;
+                                    navigate(`/chat?patientId=${pid}`);
+                                }}
+                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition flex items-center gap-2"
+                            >
+                                <Search className="w-4 h-4" /> AI Analysis
+                            </button>
+
+                            <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full uppercase tracking-wide flex items-center">
+                                Active Access
+                            </div>
                         </div>
                     </div>
 

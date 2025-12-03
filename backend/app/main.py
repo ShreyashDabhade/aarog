@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from typing import Optional
 
 # Internal imports
 from . import models, auth, database, deps
@@ -124,9 +125,46 @@ def get_user_public_key(email: str, db: Session = Depends(get_db)):
     return {"public_key": user.public_key_pem}
 
 @app.get("/query")
-async def query_agent(q: str, current_user: models.User = Depends(auth.get_current_user)):
+async def query_agent(
+    q: str, 
+    patient_id: Optional[int] = None, # Optional: For doctors focusing on a patient
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    filter_metadata = None
+
+    # CASE 1: Patient is asking
+    if current_user.role == "patient":
+        # RESTRICTION: Patient can only search their own reports
+        my_reports = db.query(models.Report).filter(models.Report.owner_id == current_user.id).all()
+        if not my_reports:
+            return {"answer": "You have no reports in your vault to analyze."}
+        
+        report_ids = [r.id for r in my_reports]
+        filter_metadata = {"report_id": {"$in": report_ids}}
+
+    # CASE 2: Doctor is asking
+    elif current_user.role == "doctor":
+        if patient_id:
+            # Sub-case: Doctor wants to search specific patient's shared records
+            # 1. Verify that the patient has actually shared these records with this doctor
+            shared_records = db.query(models.SharedReport).join(models.Report).filter(
+                models.SharedReport.doctor_id == current_user.id,
+                models.Report.owner_id == patient_id
+            ).all()
+            
+            if not shared_records:
+                return {"answer": "You do not have access to any records for this patient."}
+            
+            report_ids = [share.report_id for share in shared_records]
+            filter_metadata = {"report_id": {"$in": report_ids}}
+        else:
+            # Sub-case: Global Search (No filter = Search entire DB)
+            # This allows the doctor to ask general medical questions based on the aggregate knowledge base
+            filter_metadata = None 
+
     try:
-        answer = run_query(q)
+        answer = run_query(q, filter_metadata)
         return {"answer": answer}
     except Exception as e:
         return {"answer": "Error processing request."}

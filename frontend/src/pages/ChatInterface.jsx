@@ -1,16 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom'; // Import useSearchParams
+import { Send, Bot, User, Sparkles, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ChatInterface = () => {
   const [query, setQuery] = useState("");
-  const [history, setHistory] = useState([
-    { role: 'bot', text: "Hello. I have secure access to the anonymized medical knowledge base. How can I assist you today?" }
-  ]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { token } = useAuthStore();
+  const { token, role } = useAuthStore();
   const endRef = useRef(null);
+  
+  // Get Patient ID from URL (if doctor is analyzing a specific patient)
+  const [searchParams] = useSearchParams();
+  const patientId = searchParams.get("patientId");
+
+  useEffect(() => {
+    // Set initial welcome message based on context
+    let welcome = "Hello. I am your secure medical assistant.";
+    
+    if (role === 'patient') {
+        welcome = "I have access to YOUR encrypted records only. How can I help you understand your health?";
+    } else if (role === 'doctor') {
+        if (patientId) {
+            welcome = `I am analyzing records for Patient ID #${patientId}. Ask me about their specific history.`;
+        } else {
+            welcome = "I am in Global Research Mode. I can search the entire anonymized knowledge base for patterns.";
+        }
+    }
+    
+    setHistory([{ role: 'bot', text: welcome }]);
+  }, [role, patientId]);
 
   const scrollToBottom = () => endRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(scrollToBottom, [history]);
@@ -24,7 +44,15 @@ const ChatInterface = () => {
     setLoading(true);
 
     try {
-      const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/query?q=${encodeURIComponent(query)}`, {
+      // Build Query URL
+      let url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/query?q=${encodeURIComponent(query)}`;
+      
+      // If doctor is focusing on a patient, append the ID
+      if (role === 'doctor' && patientId) {
+          url += `&patient_id=${patientId}`;
+      }
+
+      const resp = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -37,7 +65,7 @@ const ChatInterface = () => {
       setHistory(prev => [...prev, { role: 'bot', text: data.answer }]);
     } catch (err) {
       console.error(err);
-      setHistory(prev => [...prev, { role: 'bot', text: "Error connecting to the secure AI agent. Please ensure the backend is running." }]);
+      setHistory(prev => [...prev, { role: 'bot', text: "Error connecting to the secure AI agent." }]);
     } finally {
       setLoading(false);
     }
@@ -49,17 +77,22 @@ const ChatInterface = () => {
       {/* Header */}
       <div className="px-8 py-5 border-b border-slate-100 bg-white flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg ${role === 'doctor' && !patientId ? 'bg-indigo-600 shadow-indigo-500/20' : 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-blue-500/20'}`}>
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Clinical AI Agent</h3>
-            <p className="text-xs text-slate-500">Powered by RAG & Gemini</p>
+            <h3 className="font-bold text-slate-800 text-sm">
+                {role === 'doctor' && !patientId ? "Global Medical Research AI" : "Personal Clinical Agent"}
+            </h3>
+            <p className="text-xs text-slate-500">
+                {role === 'doctor' && patientId ? `Focusing on Patient #${patientId}` : "Powered by RAG & Gemini"}
+            </p>
           </div>
         </div>
-        <div className="px-3 py-1 bg-slate-100 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          Privacy Mode Active
+        
+        <div className={`px-3 py-1 rounded-full border text-xs font-semibold flex items-center gap-2 ${role === 'doctor' && !patientId ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+          <div className={`w-2 h-2 rounded-full animate-pulse ${role === 'doctor' && !patientId ? 'bg-indigo-500' : 'bg-emerald-500'}`}></div>
+          {role === 'doctor' && !patientId ? "Global Context" : "Scoped Context"}
         </div>
       </div>
 
@@ -77,7 +110,7 @@ const ChatInterface = () => {
             </div>
             
             <div className={`
-              max-w-[75%] p-5 rounded-2xl text-sm leading-relaxed shadow-sm
+              max-w-[75%] p-5 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap
               ${msg.role === 'user' 
                 ? 'bg-slate-900 text-white rounded-tr-none' 
                 : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'}
@@ -111,7 +144,7 @@ const ChatInterface = () => {
             onChange={(e) => setQuery(e.target.value)} 
             onKeyDown={(e) => e.key === 'Enter' && handleSend()} 
             className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 placeholder:text-slate-400 px-4 py-3"
-            placeholder="Ask a clinical question about your records..." 
+            placeholder={role === 'doctor' && !patientId ? "Ask a global research question..." : "Ask about the patient's history..."}
             disabled={loading}
           />
           <button 
@@ -123,7 +156,10 @@ const ChatInterface = () => {
           </button>
         </div>
         <p className="text-center text-xs text-slate-400 mt-4">
-          AI generated responses are based on anonymized data. Please verify with original documents in your vault.
+          {role === 'doctor' && !patientId 
+            ? <span className="flex items-center justify-center gap-1"><AlertCircle className="w-3 h-3"/> Global Search Mode: Analyzing all anonymized records.</span>
+            : "AI responses are based on the specific patient's anonymized data context."
+          }
         </p>
       </div>
     </div>

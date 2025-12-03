@@ -3,9 +3,11 @@ import traceback
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.prompts import PromptTemplate
+from langchain.tools import Tool
 
 # Internal imports
-from .agent_tools import search_medical_reports, get_current_date
+from .retrieval import search_reports # Import directly
+from .agent_tools import get_current_date # Keep this static tool
 
 # --- CONFIG ---
 LLM_MODEL = "gemini-2.5-flash"
@@ -29,7 +31,7 @@ Final Answer: the final answer to the original input question
 
 IMPORTANT RULES:
 1. NEVER invent medical information. If the info is not in the tools, say "I don't know".
-2. All patient data is anonymized (e.g., [NAME], [DATE]). Do not speculate on real values.
+2. All patient data is anonymized. Do not speculate on real values.
 3. Always cite the SOURCE ID if available.
 
 Begin!
@@ -38,10 +40,41 @@ Question: {input}
 Thought:{agent_scratchpad}
 """
 
-def get_agent_executor():
+def create_search_tool(filter_metadata: dict = None):
+    """Creates a configured search tool with a specific visibility filter."""
+    
+    def search_func(query: str):
+        print(f" [Agent Tool] Searching: {query} | Filter: {filter_metadata}")
+        try:
+            results = search_reports(query, k=3, filter_metadata=filter_metadata)
+            
+            docs = results.get('documents')
+            ids = results.get('ids')
+
+            if not docs or not docs[0]:
+                return "Observation: No relevant records found in the allowed scope."
+            
+            flat_docs = docs[0]
+            flat_ids = ids[0]
+            
+            formatted_context = ""
+            for i, (doc, doc_id) in enumerate(zip(flat_docs, flat_ids)):
+                formatted_context += f"SOURCE {doc_id}: {doc}\n\n"
+                
+            return formatted_context
+        except Exception as e:
+            return f"Observation: Database error - {str(e)}"
+
+    return Tool(
+        name="search_medical_reports",
+        func=search_func,
+        description="Useful for answering questions about medical history. Returns excerpts from allowed reports."
+    )
+
+def get_agent_executor(filter_metadata: dict = None):
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        raise ValueError("CRITICAL: GOOGLE_API_KEY is missing from environment variables.")
+        raise ValueError("CRITICAL: GOOGLE_API_KEY is missing.")
 
     # 1. Setup LLM
     try:
@@ -54,8 +87,9 @@ def get_agent_executor():
     except Exception as e:
         raise ConnectionError(f"Failed to initialize Gemini: {str(e)}")
     
-    # 2. Setup Tools
-    tools = [search_medical_reports, get_current_date]
+    # 2. Setup Tools (Dynamic)
+    search_tool = create_search_tool(filter_metadata)
+    tools = [search_tool, get_current_date]
     
     # 3. Setup Prompt
     prompt = PromptTemplate.from_template(REACT_PROMPT)
@@ -69,14 +103,14 @@ def get_agent_executor():
         tools=tools, 
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5 # Prevent infinite loops
+        max_iterations=5
     )
     return agent_executor
 
-def run_query(user_query: str):
-    print(f" [Agent] Received Query: {user_query}")
+def run_query(user_query: str, filter_metadata: dict = None):
+    print(f" [Agent] Received Query: {user_query} | Scope: {filter_metadata}")
     try:
-        executor = get_agent_executor()
+        executor = get_agent_executor(filter_metadata)
         result = executor.invoke({"input": user_query})
         return result["output"]
         
@@ -84,5 +118,5 @@ def run_query(user_query: str):
         return f"CONFIGURATION ERROR: {str(ve)}"
     except Exception as e:
         print(f" [Agent Crash] {e}")
-        traceback.print_exc() # Print full stack trace to console for debugging
-        return f"SYSTEM ERROR: {str(e)}. Check backend terminal for details."
+        traceback.print_exc()
+        return f"SYSTEM ERROR: {str(e)}"
