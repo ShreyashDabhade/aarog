@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from .. import database, models, auth
+from app.database import get_db
+
 
 # Prefix ensures endpoints are at /auth/register and /auth/token
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -66,3 +68,10 @@ def login(form_data: dict = Body(...), db: Session = Depends(database.get_db)):
         "user_id": user.id,
         "encrypted_private_key": user.encrypted_private_key
     }
+
+@router.get("/user/id")
+def get_user_id(email: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    return {"id": user.id, "email": user.email}

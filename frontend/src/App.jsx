@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import UploadWizard from './pages/UploadWizard';
 import ChatInterface from './pages/ChatInterface';
+import ConsentAndEmergency from './pages/ConsentAndEmergency';
 
 const ProtectedRoute = () => {
   const { isAuthenticated } = useAuthStore();
@@ -27,8 +28,12 @@ const App = () => {
             <Route index element={<Dashboard />} />
             <Route path="upload" element={<UploadWizard />} />
             <Route path="chat" element={<ChatInterface />} />
+
+            {/* NEW Consent Page */}
+            <Route path="consent" element={<ConsentAndEmergency />} />
           </Route>
         </Route>
+
         
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />

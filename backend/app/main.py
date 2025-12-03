@@ -271,3 +271,6 @@ def revoke_access(
         return {"status": "revoked"}
     
     raise HTTPException(404, "Share record not found")
+
+from .routers.consent_routes import router as consent_router
+app.include_router(consent_router, prefix="/secure")
