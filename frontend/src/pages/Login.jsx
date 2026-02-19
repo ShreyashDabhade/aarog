@@ -3,7 +3,6 @@ import { cryptoService } from '../lib/crypto';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, Link } from 'react-router-dom';
 import { Key, ArrowRight, Stethoscope, User } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -71,11 +70,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden font-sans">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-md z-10"
-      >
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-md z-10">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
           <p className="text-slate-400 text-sm">Access your SecureMed Vault</p>
@@ -119,7 +114,7 @@ const Login = () => {
             New user? <Link to="/register" className="text-white hover:underline font-semibold transition">Create a Vault</Link>
           </p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

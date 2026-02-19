@@ -2,32 +2,36 @@ import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { Shield, LayoutDashboard, UploadCloud, MessageSquare, LogOut, Menu, X, Stethoscope, User, ChevronRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
-const SidebarItem = ({ to, icon: Icon, label }) => (
-  <NavLink
-    to={to}
-    className={({ isActive }) =>
-      `flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
-        isActive 
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
-          : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
-      }`
-    }
-  >
-    {({ isActive }) => (
-      <>
-        <div className="flex items-center gap-3">
-          <Icon className="w-5 h-5 transition-transform group-hover:scale-110" />
-          <span className="font-medium text-sm tracking-wide">{label}</span>
-        </div>
-        <div className={isActive ? "opacity-100" : "opacity-0"}>
-           <ChevronRight className="w-4 h-4 opacity-50" />
-        </div>
-      </>
-    )}
-  </NavLink>
-);
+const SidebarItem = ({ to, icon, label }) => {
+  const IconComponent = icon;
+
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
+          isActive
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+            : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <div className="flex items-center gap-3">
+            <IconComponent className="w-5 h-5 transition-transform group-hover:scale-110" />
+            <span className="font-medium text-sm tracking-wide">{label}</span>
+          </div>
+          <div className={isActive ? "opacity-100" : "opacity-0"}>
+            <ChevronRight className="w-4 h-4 opacity-50" />
+          </div>
+        </>
+      )}
+    </NavLink>
+  );
+};
 
 const DashboardLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -43,8 +47,7 @@ const DashboardLayout = () => {
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans">
       <AnimatePresence>
         {isMobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <div
             className="fixed inset-0 bg-slate-900/60 z-40 lg:hidden backdrop-blur-sm" 
             onClick={() => setIsMobileMenuOpen(false)}
           />

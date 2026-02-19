@@ -19,6 +19,7 @@ from .agent_runner import run_query
 from .routers import auth as auth_router 
 from .routers import consent as sharing_router # Existing Crypto Sharing
 from .routers import policy_routes # <--- NEW: Consent Policy Router
+from .routers import ocr as ocr_router
 
 # Create Tables
 models.Base.metadata.create_all(bind=engine)
@@ -36,7 +37,8 @@ app.add_middleware(
 # --- ROUTER REGISTRATION ---
 app.include_router(auth_router.router)
 app.include_router(sharing_router.router)
-app.include_router(policy_routes.router) # <--- NEW
+app.include_router(policy_routes.router)
+app.include_router(ocr_router.router)
 
 # --- REDIS CONNECTION ---
 redis_client = redis.from_url(settings.CELERY_BROKER_URL)

@@ -1,9 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { cryptoService } from '../lib/crypto';
-import { FileText, Lock, AlertTriangle, Share2, Eye, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, AlertTriangle, Share2, Eye, RefreshCw } from 'lucide-react';
 
 const PatientDashboard = () => {
   const { token, userPrivateKey } = useAuthStore();
@@ -21,7 +20,7 @@ const PatientDashboard = () => {
   const autoViewId = rawAutoViewId ? rawAutoViewId.split('_')[0] : null;
 
   // --- Auto-Refresh Logic ---
-  const fetchReports = async (isBackground = false) => {
+  const fetchReports = useCallback(async (isBackground = false) => {
     if (!token) return;
     if (!isBackground) setIsLoading(true);
 
@@ -40,16 +39,16 @@ const PatientDashboard = () => {
     } finally { 
       if (!isBackground) setIsLoading(false); 
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchReports();
     pollingRef.current = setInterval(() => fetchReports(true), 5000); 
     return () => clearInterval(pollingRef.current);
-  }, [token]);
+  }, [fetchReports]);
 
   // --- Decrypt & View Logic ---
-  const handleViewFile = async (report) => {
+  const handleViewFile = useCallback(async (report) => {
     if (!userPrivateKey) {
         alert("Security Key Missing. You must re-login to view files.");
         return;
@@ -81,7 +80,7 @@ const PatientDashboard = () => {
     } finally {
         setViewingId(null);
     }
-  };
+  }, [userPrivateKey]);
 
   // --- Auto-View Effect ---
   useEffect(() => {
@@ -98,7 +97,7 @@ const PatientDashboard = () => {
             console.warn(`Report ${autoViewId} not found in vault (Count: ${reports.length})`);
         }
     }
-  }, [autoViewId, reports]); // Depend on the SANITIZED id
+  }, [autoViewId, handleViewFile, reports, viewingId]); // Depend on the SANITIZED id
 
   const handleShareClick = (report) => {
     navigate(`/consent?reportId=${report.id}`);
@@ -131,8 +130,8 @@ const PatientDashboard = () => {
           </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {reports.map((report, i) => (
-            <motion.div key={report.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
+            {reports.map((report) => (
+            <div key={report.id}
                 className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-xl hover:shadow-slate-200/50 hover:border-blue-200 transition-all group"
             >
                 <div className="flex items-start justify-between mb-6">
@@ -163,7 +162,7 @@ const PatientDashboard = () => {
                         <><Eye className="w-4 h-4" /> Decrypt & View</>
                     )}
                 </button>
-            </motion.div>
+            </div>
             ))}
         </div>
       )}

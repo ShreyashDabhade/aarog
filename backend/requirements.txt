@@ -17,3 +17,8 @@ python-dotenv==1.0.1
 python-jose
 passlib
 bcrypt
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+paddleocr==2.8.1
+paddlepaddle==2.6.2
+pypdfium2==4.30.0

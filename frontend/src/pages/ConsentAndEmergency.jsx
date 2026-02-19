@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from 'react-router-dom'; // For auto-selecting file
 import {
   fetchConsents,
@@ -34,10 +34,10 @@ export default function ConsentAndEmergency() {
   const [priority, setPriority] = useState(1);
   const [canApprove, setCanApprove] = useState(true);
 
-  const { user, token, userPrivateKey } = useAuthStore();
+  const { token, userPrivateKey } = useAuthStore();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -60,7 +60,7 @@ export default function ConsentAndEmergency() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [API_URL, token]);
 
   useEffect(() => {
     loadData().then(() => {
@@ -71,7 +71,7 @@ export default function ConsentAndEmergency() {
             setSelectedFileId(preSelectedId);
         }
     });
-  }, []);
+  }, [loadData, searchParams]);
 
   // --- UNIFIED SHARE FUNCTION ---
   async function handleCreateConsent(e) {
