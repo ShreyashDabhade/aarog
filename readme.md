@@ -6,7 +6,7 @@ cd backend
 # Activate venv (Windows PowerShell)
 .\venv\Scripts\Activate.ps1
 
-# IMPORTANT: run Celery from `backend` (not from `backend\venv`)
+# run Celery from `backend`
 celery -A app.tasks:celery_app worker --loglevel=info --pool=solo
 
 # In a second terminal
