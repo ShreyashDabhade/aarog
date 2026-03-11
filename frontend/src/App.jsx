@@ -13,7 +13,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import UploadWizard from "./pages/UploadWizard";
 import ChatInterface from "./pages/ChatInterface";
-import ConsentAndEmergency from "./pages/ConsentAndEmergency"; // <--- Import
+import ConsentAndEmergency from "./pages/ConsentAndEmergency";
 
 const ProtectedRoute = () => {
 	const { isAuthenticated } = useAuthStore();

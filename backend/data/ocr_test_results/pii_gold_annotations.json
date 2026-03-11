@@ -1,0 +1,158 @@
+{
+  "Gemini_Generated_Image_21ifui21ifui21if.table.txt": {
+    "entities": [
+      {
+        "tag": "ID",
+        "value": "66119"
+      },
+      {
+        "tag": "NAME",
+        "value": "Mrs. Pooja Sharma"
+      },
+      {
+        "tag": "DATE",
+        "value": "14-02-2026"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr.R.Malhotra"
+      }
+    ]
+  },
+  "Gemini_Generated_Image_6yrxss6yrxss6yrx.table.txt": {
+    "entities": [
+      {
+        "tag": "ID",
+        "value": "55432"
+      },
+      {
+        "tag": "NAME",
+        "value": "AMIT JAIN"
+      },
+      {
+        "tag": "DATE",
+        "value": "10:02AM"
+      },
+      {
+        "tag": "DATE",
+        "value": "17/02/2026"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr S Arora"
+      }
+    ]
+  },
+  "Gemini_Generated_Image_h593xwh593xwh593.table.txt": {
+    "entities": [
+      {
+        "tag": "ID",
+        "value": "LAB778291"
+      },
+      {
+        "tag": "NAME",
+        "value": "Mr. Sameer Khan"
+      },
+      {
+        "tag": "DATE",
+        "value": "15/02/2026"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr.R. Shah"
+      }
+    ]
+  },
+  "Gemini_Generated_Image_sljyizsljyizsljy.table.txt": {
+    "entities": [
+      {
+        "tag": "ADDRESS",
+        "value": "Plot 55,Main Road,Pune-411001"
+      },
+      {
+        "tag": "EMAIL",
+        "value": "info@gemail.com"
+      },
+      {
+        "tag": "ID",
+        "value": "33019"
+      },
+      {
+        "tag": "NAME",
+        "value": "MR VIKRAM DESHMUKH"
+      },
+      {
+        "tag": "DATE",
+        "value": "05-Feb-2026"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr. P. Mehta"
+      }
+    ]
+  },
+  "Gemini_Generated_Image_swsk6tswsk6tswsk.table.txt": {
+    "entities": [
+      {
+        "tag": "ADDRESS",
+        "value": "Nearori Road, Kampenku Road, Baihut lanara"
+      },
+      {
+        "tag": "PHONE",
+        "value": "+91 798630020"
+      },
+      {
+        "tag": "PHONE",
+        "value": "+91 952281538"
+      },
+      {
+        "tag": "EMAIL",
+        "value": "info@gmail.com"
+      },
+      {
+        "tag": "ID",
+        "value": "78901"
+      },
+      {
+        "tag": "NAME",
+        "value": "Aarav Gupta"
+      },
+      {
+        "tag": "DATE",
+        "value": "18 Feb 2026"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr.N.Iyer"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr. N. lyer"
+      }
+    ]
+  },
+  "Gemini_Generated_Image_uc531kuc531kuc53.table.txt": {
+    "entities": [
+      {
+        "tag": "ADDRESS",
+        "value": "Sector 9, Vashi, Navi Mumbai"
+      },
+      {
+        "tag": "ID",
+        "value": "445002"
+      },
+      {
+        "tag": "NAME",
+        "value": "Ms.Aditi Rao"
+      },
+      {
+        "tag": "DATE",
+        "value": "12/02/2026 05:40PM"
+      },
+      {
+        "tag": "NAME",
+        "value": "Dr. S. Kulkarni"
+      }
+    ]
+  }
+}

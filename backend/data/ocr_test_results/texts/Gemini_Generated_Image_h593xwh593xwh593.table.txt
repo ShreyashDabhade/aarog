@@ -1,0 +1,30 @@
+METRO DIAGNOSTICS LAB
+Accredited Pathology Services
+Lab ID:LAB778291
+Patient: Mr. Sameer Khan
+Sample Collected: 15/02/2026
+Age: 34/M
+COMPLETE BLOOD COUNT (CBC)
+Parameter
+Result
+Reference Range
+Hemoglobin
+12.4 g/dL
+13-17
+RBC
+4.2 mill/cmm
+4.5-5.9
+WBC
+11,200/cmm
+4,000-11,000
+Platelets
+2.1 lakh/cmm
+1.5-4.5
+Interpretation:
+Mild leukocytosis suggestive of infection.
+Reported by:
+METRO
+igmature
+DIAGNOSTICS LAB
+-VERIFIED
+Dr.R. Shah (Pathologist)

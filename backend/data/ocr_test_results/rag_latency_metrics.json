@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-02-19T07:09:52Z",
+  "indexed_reports": 6,
+  "indexed_report_ids": [
+    "bench_c56d0f5314_0",
+    "bench_c56d0f5314_1",
+    "bench_c56d0f5314_2",
+    "bench_c56d0f5314_3",
+    "bench_c56d0f5314_4",
+    "bench_c56d0f5314_5"
+  ],
+  "chroma_retrieval_latency": {
+    "summary_ms": {
+      "count": 6.0,
+      "mean": 13.061216663724432,
+      "median": 13.155699998605996,
+      "min": 9.858999997959472,
+      "max": 16.65619999403134
+    },
+    "samples": [
+      {
+        "query": "What is the patient name?",
+        "elapsed_ms": 16.65619999403134,
+        "result_count": 3
+      },
+      {
+        "query": "What is the diagnosis?",
+        "elapsed_ms": 15.33529999142047,
+        "result_count": 3
+      },
+      {
+        "query": "What medicine was prescribed?",
+        "elapsed_ms": 12.812599990866147,
+        "result_count": 3
+      },
+      {
+        "query": "What is the follow-up advice?",
+        "elapsed_ms": 13.498800006345846,
+        "result_count": 3
+      },
+      {
+        "query": "What is the patient ID?",
+        "elapsed_ms": 9.858999997959472,
+        "result_count": 3
+      },
+      {
+        "query": "What is the visit date?",
+        "elapsed_ms": 10.20540000172332,
+        "result_count": 3
+      }
+    ]
+  },
+  "gemini_synthesis_latency": {
+    "enabled": true,
+    "model": "gemini-2.5-flash",
+    "summary_seconds": {
+      "count": 4.0,
+      "mean": 3.723698025001795,
+      "median": 2.7034862500076997,
+      "min": 2.480069099998218,
+      "max": 7.007750499993563
+    },
+    "samples": [
+      {
+        "query": "Summarize the diagnosis and prescription in 2 lines.",
+        "elapsed_seconds": 7.007750499993563,
+        "response_chars": 304
+      },
+      {
+        "query": "List the follow-up recommendations from the reports.",
+        "elapsed_seconds": 2.6259301000100095,
+        "response_chars": 209
+      },
+      {
+        "query": "Which reports mention fever or infection?",
+        "elapsed_seconds": 2.78104240000539,
+        "response_chars": 251
+      },
+      {
+        "query": "Extract patient identifiers and visit dates.",
+        "elapsed_seconds": 2.480069099998218,
+        "response_chars": 419
+      }
+    ]
+  }
+}
