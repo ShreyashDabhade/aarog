@@ -1,6 +1,6 @@
-# SecureMed
+# AAROG
 
-SecureMed is a privacy-first medical record vault with an AI assistant on top. Patients can upload reports, keep the original file encrypted for personal access, create an anonymized AI-safe copy for search and analysis, and selectively share access with doctors using temporary session codes.
+AAROG is a privacy-first medical record vault with an AI assistant on top. Patients can upload reports, keep the original file encrypted for personal access, create an anonymized AI-safe copy for search and analysis, and selectively share access with doctors using temporary session codes.
 
 The project is split into:
 
